@@ -5,6 +5,8 @@ href="http://wala.sourceforge.net">the WALA home page</a>.
 =========
 #### How to merge from upstream WALA:
 
+##### 0. git remote add upstream https://github.com/wala/WALA.git
+
 ##### 1. git fetch upstream
 
 ##### 2. git merge upstream/master
