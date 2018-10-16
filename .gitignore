@@ -5,12 +5,14 @@
 */bin/
 */bin/*
 */build/
+*/target/
 *~
 *.iml
 .classpath
 .metadata/
 .project
 .idea/
+RELEASE/
 /*/.settings/org.eclipse.buildship.core.prefs
 /.gradle/
 /.settings/org.eclipse.buildship.core.prefs

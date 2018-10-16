@@ -2,19 +2,11 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: %Bundle-Name
 Bundle-SymbolicName: com.ibm.wala.dalvik
-<<<<<<< HEAD
-Bundle-Version: 1.3.10.qualifier
-Require-Bundle: com.ibm.wala.cast;bundle-version="1.0.0",
- com.ibm.wala.core;bundle-version="1.1.3",
- com.ibm.wala.shrike;bundle-version="1.3.1"
-Bundle-RequiredExecutionEnvironment: JavaSE-1.6
-=======
 Bundle-Version: 1.5.1.qualifier
 Require-Bundle: com.ibm.wala.core;bundle-version="1.1.3",
  com.ibm.wala.shrike;bundle-version="1.3.1",
  com.ibm.wala.cast;bundle-version="1.0.0"
 Bundle-RequiredExecutionEnvironment: JavaSE-1.8
->>>>>>> upstream/master
 Bundle-ActivationPolicy: lazy 
 Export-Package: com.google.common.annotations,
  com.google.common.base,
