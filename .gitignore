@@ -6,9 +6,11 @@
 */bin/*
 */build/
 *~
+*.iml
 .classpath
 .metadata/
 .project
+.idea/
 /*/.settings/org.eclipse.buildship.core.prefs
 /.gradle/
 /.settings/org.eclipse.buildship.core.prefs
