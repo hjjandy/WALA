@@ -30,6 +30,7 @@ import com.ibm.wala.cast.ir.ssa.AstIsDefinedInstruction;
 import com.ibm.wala.cast.ir.ssa.AstLexicalAccess.Access;
 import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.ir.ssa.AstLexicalWrite;
+import com.ibm.wala.cast.ir.ssa.AstYieldInstruction;
 import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
 import com.ibm.wala.cast.ir.ssa.CAstUnaryOp;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
@@ -81,10 +82,11 @@ import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.collections.MapUtil;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.debug.Assertions;
-import com.ibm.wala.util.graph.INodeWithNumber;
+import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.graph.impl.SparseNumberedGraph;
 import com.ibm.wala.util.graph.traverse.DFS;
 import com.ibm.wala.util.intset.IntSet;
@@ -139,8 +141,8 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
    * fully define a function. invoked after all the code of the function has
    * been processed
    */
-  protected abstract void defineFunction(CAstEntity N, WalkContext definingContext, AbstractCFG cfg, SymbolTable symtab,
-      boolean hasCatchBlock, Map<IBasicBlock, TypeReference[]> catchTypes, boolean hasMonitorOp, AstLexicalInformation lexicalInfo,
+  protected abstract void defineFunction(CAstEntity N, WalkContext definingContext, AbstractCFG<SSAInstruction, ? extends IBasicBlock<SSAInstruction>> cfg, SymbolTable symtab,
+      boolean hasCatchBlock, Map<IBasicBlock<SSAInstruction>, TypeReference[]> catchTypes, boolean hasMonitorOp, AstLexicalInformation lexicalInfo,
       DebuggingInformation debugInfo);
 
   /**
@@ -207,6 +209,13 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
   protected abstract CAstType exceptionType();
   
   /**
+   * lift variable declarations for lexical scoping purposes?
+   */
+  protected boolean liftDeclarationsForLexicalScoping() {
+    return false;
+  }
+  
+  /**
    * used to generate instructions for array operations; defaults to this
    */
   private ArrayOpHandler arrayOpHandler;
@@ -246,8 +255,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
    * an object literal (e.g., PHP). This method should be overridden to handle
    * such cases.
    */
-  protected void handleUnspecifiedLiteralKey(WalkContext context, CAstNode objectLiteralNode, int unspecifiedLiteralIndex,
-      CAstVisitor<WalkContext> visitor) {
+  protected void handleUnspecifiedLiteralKey() {
     Assertions.UNREACHABLE();
   }
 
@@ -324,7 +332,6 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
    *          the AST node representing the read
    * @param context
    * @param name
-   * @return
    */
   protected int doLexicallyScopedRead(CAstNode node, WalkContext context, final String name, TypeReference type) {
     return doLexReadHelper(context, name, type);
@@ -343,7 +350,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
    * call sites, as would be required for
    * {@link #doLexicallyScopedRead(CAstNode, WalkContext, String)}
    */
-  private int doLexReadHelper(WalkContext context, final String name, TypeReference type) {
+  private static int doLexReadHelper(WalkContext context, final String name, TypeReference type) {
     Symbol S = context.currentScope().lookup(name);
     Scope definingScope = S.getDefiningScope();
     CAstEntity E = definingScope.getEntity();
@@ -370,7 +377,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
    * @param entityName
    * @param isWrite
    */
-  private void markExposedInEnclosingEntities(WalkContext context, final String name, Scope definingScope, TypeReference type, CAstEntity E,
+  private static void markExposedInEnclosingEntities(WalkContext context, final String name, Scope definingScope, TypeReference type, CAstEntity E,
       final String entityName, boolean isWrite) {
     Scope curScope = context.currentScope();
     while (!curScope.equals(definingScope)) {
@@ -410,7 +417,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
   /**
    * generate instructions for a read of a global
    */
-  protected int doGlobalRead(CAstNode node, WalkContext context, String name, TypeReference type) {
+  protected int doGlobalRead(@SuppressWarnings("unused") CAstNode node, WalkContext context, String name, TypeReference type) {
     // Global variables can be treated as lexicals defined in the CG root, or
     if (treatGlobalsAsLexicallyScoped()) {
 
@@ -451,6 +458,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
   /**
    * generate instructions to check if ref has field, storing answer in result
    */
+  @SuppressWarnings("unused")
   protected void doIsFieldDefined(WalkContext context, int result, int ref, CAstNode field) {
     Assertions.UNREACHABLE();
   }
@@ -470,18 +478,18 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
    * for handling languages that let you include other source files named
    * statically (e.g., ABAP)
    */
-  protected final Map namedEntityResolver;
+  protected final Map<Object, CAstEntity> namedEntityResolver;
 
   protected final SSAInstructionFactory insts;
 
-  protected AstTranslator(IClassLoader loader, Map namedEntityResolver, ArrayOpHandler arrayOpHandler) {
+  protected AstTranslator(IClassLoader loader, Map<Object, CAstEntity> namedEntityResolver, ArrayOpHandler arrayOpHandler) {
     this.loader = loader;
     this.namedEntityResolver = namedEntityResolver;
     this.arrayOpHandler = arrayOpHandler!=null? arrayOpHandler: this;
     this.insts = loader.getInstructionFactory();
   }
 
-  protected AstTranslator(IClassLoader loader, Map namedEntityResolver) {
+  protected AstTranslator(IClassLoader loader, Map<Object, CAstEntity> namedEntityResolver) {
     this(loader, namedEntityResolver, null);
   }
   
@@ -496,15 +504,27 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
   private static class AstDebuggingInformation implements DebuggingInformation {
     private Position codeBodyPosition;
 
+    private Position codeBodyNamePosition;
+    
     private String[][] valueNumberNames;
 
     private Position[] instructionPositions;
 
-    AstDebuggingInformation(Position codeBodyPosition, Position[] instructionPositions, String[] names) {
+    private Position[][] operandPositions;
+
+    private Position[] parameterPositions;
+    
+    AstDebuggingInformation(Position codeBodyNamePosition, Position codeBodyPosition, Position[] instructionPositions, Position[][] operandPositions, Position[] parameterPositions, String[] names) {
+      this.codeBodyNamePosition = codeBodyNamePosition;
+      
       this.codeBodyPosition = codeBodyPosition;
 
       this.instructionPositions = instructionPositions;
 
+      this.operandPositions = operandPositions;
+      
+      this.parameterPositions = parameterPositions;
+      
       valueNumberNames = new String[names.length][];
       for (int i = 0; i < names.length; i++) {
         if (names[i] != null) {
@@ -521,13 +541,32 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     }
 
     @Override
+    public Position getCodeNamePosition() {
+      return codeBodyNamePosition;
+    }
+
+    @Override
     public Position getInstructionPosition(int instructionOffset) {
       return instructionPositions[instructionOffset];
     }
 
     @Override
+    public Position getOperandPosition(int instructionOffset, int operand) {
+      if (operandPositions[instructionOffset] != null && operandPositions[instructionOffset].length > operand) {
+        return operandPositions[instructionOffset][operand];
+      } else {
+        return null;
+      }
+    }
+
+    @Override
     public String[][] getSourceNamesForValues() {
       return valueNumberNames;
+    }
+
+    @Override
+    public Position getParameterPosition(int param) {
+      return parameterPositions[param];
     }
   }
 
@@ -545,7 +584,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
    * basic block implementation used in the CFGs constructed during the
    * IR-generating AST traversal
    */
-  protected final static class PreBasicBlock implements INodeWithNumber, IBasicBlock<SSAInstruction> {
+  protected final static class PreBasicBlock implements IBasicBlock<SSAInstruction> {
     private static final int NORMAL = 0;
 
     private static final int HANDLER = 1;
@@ -562,7 +601,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
 
     private int lastIndex = -2;
 
-    private final List<SSAInstruction> instructions = new ArrayList<SSAInstruction>();
+    private final List<SSAInstruction> instructions = new ArrayList<>();
 
     @Override
     public int getNumber() {
@@ -700,16 +739,15 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
    * holds the control-flow graph as it is being constructed. When construction
    * is complete, information is stored in an {@link AstCFG}
    */
-  @SuppressWarnings("javadoc")
   public final class IncipientCFG extends SparseNumberedGraph<PreBasicBlock> {
 
     protected class Unwind {
-      private final Map<PreBasicBlock, UnwindState> unwindData = new LinkedHashMap<PreBasicBlock, UnwindState>();
+      private final Map<PreBasicBlock, UnwindState> unwindData = new LinkedHashMap<>();
 
       /**
        * a cache of generated blocks
        */
-      private final Map<Pair<UnwindState, Pair<PreBasicBlock, Boolean>>, PreBasicBlock> code = new LinkedHashMap<Pair<UnwindState, Pair<PreBasicBlock, Boolean>>, PreBasicBlock>();
+      private final Map<Pair<UnwindState, Pair<PreBasicBlock, Boolean>>, PreBasicBlock> code = new LinkedHashMap<>();
 
       void setUnwindState(PreBasicBlock block, UnwindState context) {
         unwindData.put(block, context);
@@ -820,24 +858,26 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
 
     private Unwind unwind = null;
 
-    private final List<PreBasicBlock> blocks = new ArrayList<PreBasicBlock>();
+    private final List<PreBasicBlock> blocks = new ArrayList<>();
 
     private PreBasicBlock entryBlock;
     
-    private final Map<CAstNode, PreBasicBlock> nodeToBlock = new LinkedHashMap<CAstNode, PreBasicBlock>();
+    private final Map<CAstNode, PreBasicBlock> nodeToBlock = new LinkedHashMap<>();
 
-    private final Map<Object, Set<Pair<PreBasicBlock, Boolean>>> delayedEdges = new LinkedHashMap<Object, Set<Pair<PreBasicBlock, Boolean>>>();
+    private final Map<Object, Set<Pair<PreBasicBlock, Boolean>>> delayedEdges = new LinkedHashMap<>();
 
     private final Object exitMarker = new Object();
 
-    private final Set<PreBasicBlock> deadBlocks = new LinkedHashSet<PreBasicBlock>();
+    private final Set<PreBasicBlock> deadBlocks = new LinkedHashSet<>();
 
-    private final Set<PreBasicBlock> normalToExit = new LinkedHashSet<PreBasicBlock>();
+    private final Set<PreBasicBlock> normalToExit = new LinkedHashSet<>();
 
-    private final Set<PreBasicBlock> exceptionalToExit = new LinkedHashSet<PreBasicBlock>();
+    private final Set<PreBasicBlock> exceptionalToExit = new LinkedHashSet<>();
 
     private Position[] linePositions = new Position[10];
 
+    private Position[][] operandPositions = new Position[10][];
+    
     private boolean hasCatchBlock = false;
 
     /**
@@ -924,15 +964,15 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     void makeExitBlock(PreBasicBlock bb) {
       bb.makeExitBlock();
 
-      for (Iterator<? extends PreBasicBlock> ps = getPredNodes(bb); ps.hasNext();)
-        normalToExit.add(ps.next());
+      for (PreBasicBlock p : Iterator2Iterable.make(getPredNodes(bb)))
+        normalToExit.add(p);
 
       // now that we have created the exit block, add the delayed edges to the
       // exit
       checkForRealizedExitEdges(bb);
     }
 
-    void setCurrentBlockAsHandler() {
+    public void setCurrentBlockAsHandler() {
       currentBlock.makeHandlerBlock();
     }
 
@@ -946,8 +986,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
      */
     private void checkForRealizedEdges(CAstNode n) {
       if (delayedEdges.containsKey(n)) {
-        for (Iterator<Pair<PreBasicBlock, Boolean>> ss = delayedEdges.get(n).iterator(); ss.hasNext();) {
-          Pair<PreBasicBlock, Boolean> s = ss.next();
+        for (Pair<PreBasicBlock, Boolean> s : delayedEdges.get(n)) {
           PreBasicBlock src = s.fst;
           boolean exception = s.snd;
           if (unwind == null) {
@@ -967,8 +1006,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
      */
     private void checkForRealizedExitEdges(PreBasicBlock exitBlock) {
       if (delayedEdges.containsKey(exitMarker)) {
-        for (Iterator<Pair<PreBasicBlock, Boolean>> ss = delayedEdges.get(exitMarker).iterator(); ss.hasNext();) {
-          Pair<PreBasicBlock, Boolean> s = ss.next();
+        for (Pair<PreBasicBlock, Boolean> s : delayedEdges.get(exitMarker)) {
           PreBasicBlock src = s.fst;
           boolean exception = s.snd;
           addEdge(src, exitBlock);
@@ -1070,15 +1108,26 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
      * mark the current position as the position for the instruction
      */
     private void noteLinePosition(int instruction) {
-      if (linePositions.length < (instruction + 1)) {
-        Position[] newData = new Position[instruction * 2 + 1];
-        System.arraycopy(linePositions, 0, newData, 0, linePositions.length);
-        linePositions = newData;
-      }
-
+      ensurePositionSpace(instruction);
       linePositions[instruction] = getCurrentPosition();
     }
 
+    private void ensurePositionSpace(int instruction) {
+      if (linePositions.length < (instruction + 1)) {
+        Position[] newData = new Position[instruction * 2 + 1];
+        Position[][] newOperands = new Position[instruction * 2 + 1][];
+        System.arraycopy(linePositions, 0, newData, 0, linePositions.length);
+        linePositions = newData;
+        System.arraycopy(operandPositions, 0, newOperands, 0, operandPositions.length);
+        operandPositions = newOperands;
+      }
+    }
+
+    public void noteOperands(int instruction, Position... operands) {
+      ensurePositionSpace(instruction);
+      operandPositions[instruction] = operands;
+    }
+    
     public void addInstruction(SSAInstruction n) {
       deadBlocks.remove(currentBlock);
 
@@ -1090,7 +1139,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
         currentBlock.setFirstIndex(inst);
       } else {
         for(SSAInstruction priorInst : currentBlock.instructions()) {
-          assert ! (priorInst instanceof SSAGotoInstruction);
+          assert !(priorInst instanceof SSAGotoInstruction);
         }
         assert !(n instanceof SSAGetCaughtExceptionInstruction);
       }
@@ -1121,6 +1170,10 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
       }
       return sb.toString();
     }
+
+    public Position[][] getOperandPositionMap() {
+      return operandPositions;
+    }
   }
 
   /**
@@ -1147,8 +1200,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
                                       EdgeOperation normal,
                                       EdgeOperation except) {
       for (PreBasicBlock src : blocks) {
-        for (Iterator j = icfg.getSuccNodes(src); j.hasNext();) {
-          PreBasicBlock dst = (PreBasicBlock) j.next();
+        for (PreBasicBlock dst : Iterator2Iterable.make(icfg.getSuccNodes(src))) {
           if (isCatchBlock(dst.getNumber()) || (dst.isExitBlock() && icfg.exceptionalToExit.contains(src))) {
             except.act(src, dst);
           }
@@ -1160,7 +1212,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
       }
     }
     
-    private boolean checkBlockBoundaries(IncipientCFG icfg) {
+    private static boolean checkBlockBoundaries(IncipientCFG icfg) {
       MutableIntSet boundaries = IntSetUtil.make();
       for(PreBasicBlock b : icfg) {
         if (b.getFirstInstructionIndex() >= 0) {
@@ -1198,22 +1250,16 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
       final Map<PreBasicBlock, Collection<PreBasicBlock>> exceptionalEdges = 
         hasDeadBlocks? HashMapFactory.<PreBasicBlock,Collection<PreBasicBlock>>make() : null;
       if (hasDeadBlocks) {
-        transferEdges(liveBlocks, icfg, new EdgeOperation() {
-          @Override
-          public void act(PreBasicBlock src, PreBasicBlock dst) {
-            if (! normalEdges.containsKey(src)) {
-              normalEdges.put(src, HashSetFactory.<PreBasicBlock>make());
-            }
-            normalEdges.get(src).add(dst);
+        transferEdges(liveBlocks, icfg, (src, dst) -> {
+          if (! normalEdges.containsKey(src)) {
+            normalEdges.put(src, HashSetFactory.<PreBasicBlock>make());
           }
-        }, new EdgeOperation() {
-          @Override
-          public void act(PreBasicBlock src, PreBasicBlock dst) {
-            if (! exceptionalEdges.containsKey(src)) {
-              exceptionalEdges.put(src, HashSetFactory.<PreBasicBlock>make());
-            }
-            exceptionalEdges.get(src).add(dst);
-          }         
+          normalEdges.get(src).add(dst);
+        }, (src, dst) -> {
+          if (! exceptionalEdges.containsKey(src)) {
+            exceptionalEdges.put(src, HashSetFactory.<PreBasicBlock>make());
+          }
+          exceptionalEdges.get(src).add(dst);
         });
       }
       
@@ -1270,17 +1316,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
           }
         }
       } else {
-        transferEdges(liveBlocks, icfg, new EdgeOperation() {
-          @Override
-          public void act(PreBasicBlock src, PreBasicBlock dst) {
-            addNormalEdge(src, dst);
-          }
-        }, new EdgeOperation() {
-          @Override
-          public void act(PreBasicBlock src, PreBasicBlock dst) {
-            addExceptionalEdge(src, dst);
-          }
-        });
+        transferEdges(liveBlocks, icfg, this::addNormalEdge, this::addExceptionalEdge);
       }
       
       int x = 0;
@@ -1364,16 +1400,16 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
       SSAInstruction[] insts = getInstructions();
       StringBuffer s = new StringBuffer("CAst CFG of " + functionName);
       int params[] = symtab.getParameterValueNumbers();
-      for (int i = 0; i < params.length; i++)
-        s.append(" ").append(params[i]);
+      for (int param : params)
+        s.append(" ").append(param);
       s.append("\n");
 
       for (int i = 0; i < getNumberOfNodes(); i++) {
         PreBasicBlock bb = getNode(i);
         s.append(bb).append("\n");
 
-        for (Iterator ss = getSuccNodes(bb); ss.hasNext();)
-          s.append("    -->" + ss.next() + "\n");
+        for (PreBasicBlock pbb : Iterator2Iterable.make(getSuccNodes(bb)))
+          s.append("    -->" + pbb + "\n");
 
         for (int j = bb.getFirstInstructionIndex(); j <= bb.getLastInstructionIndex(); j++)
           if (insts[j] != null)
@@ -1387,7 +1423,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
 
   public static enum ScopeType {
     LOCAL, GLOBAL, SCRIPT, FUNCTION, TYPE
-  };
+  }
 
   private static final boolean DEBUG = false;
 
@@ -1395,7 +1431,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     private final String _name;
     private final CAstType type;
     
-    private FinalCAstSymbol(String _name, CAstType type) {
+    public FinalCAstSymbol(String _name, CAstType type) {
       this._name = _name;
       this.type = type;
       assert _name != null;
@@ -1474,6 +1510,8 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
 
     boolean isFinal();
 
+    boolean isGlobal();
+    
     boolean isInternalName();
 
     Object defaultInitValue();
@@ -1558,14 +1596,14 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     public Scope getDefiningScope() {
       return definingScope;
     }
-  };
+  }
 
   public abstract class AbstractScope implements Scope {
     private final Scope parent;
 
-    private final Map<String, Symbol> values = new LinkedHashMap<String, Symbol>();
+    private final Map<String, Symbol> values = new LinkedHashMap<>();
 
-    private final Map<String, String> caseInsensitiveNames = new LinkedHashMap<String, String>();
+    private final Map<String, String> caseInsensitiveNames = new LinkedHashMap<>();
 
     protected abstract SymbolTable getUnderlyingSymtab();
 
@@ -1633,10 +1671,14 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     @Override
     public void declare(CAstSymbol s, int vn) {
       String nm = s.name();
-      assert !contains(nm) : nm;
-      if (s.isCaseInsensitive())
-        caseInsensitiveNames.put(nm.toLowerCase(), nm);
-      values.put(nm, makeSymbol(s, vn));
+      if (!contains(nm)) {
+        if (s.isCaseInsensitive())
+          caseInsensitiveNames.put(nm.toLowerCase(), nm);
+        values.put(nm, makeSymbol(s, vn));
+      } else {
+        assert hasImplicitGlobals();
+        assert isGlobal(lookup(nm));
+      }
     }
 
     @Override
@@ -1713,7 +1755,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
 
     @Override
     public abstract CAstEntity getEntity();
-  };
+  }
 
   protected AbstractScope makeScriptScope(final CAstEntity s, Scope parent) {
     return new AbstractScope(parent) {
@@ -1782,7 +1824,13 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
           public boolean isParameter() {
             return false;
           }
-        };
+
+
+          @Override
+          public boolean isGlobal() {
+            return false;
+          }
+};
       }
     };
   }
@@ -1822,10 +1870,10 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
                 if (yuck == 0) {
                   return ((CAstType.Method)f.getType()).getDeclaringType();
                 } else {
-                  return (CAstType) ((CAstType.Method)f.getType()).getArgumentTypes().get(yuck-1);
+                  return ((CAstType.Method)f.getType()).getArgumentTypes().get(yuck-1);
                 }
               } else if (f.getType() instanceof CAstType.Function) {
-                return (CAstType) ((CAstType.Function)f.getType()).getArgumentTypes().get(yuck);
+                return ((CAstType.Function)f.getType()).getArgumentTypes().get(yuck);
               } else {
                 return topType();
               }
@@ -1942,12 +1990,17 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
           public boolean isParameter() {
             return vn <= params.length;
           }
+
+          @Override
+          public boolean isGlobal() {
+            return false;
+          }
         };
       }
     };
   }
 
-  private Scope makeLocalScope(CAstNode s, final Scope parent) {
+  private Scope makeLocalScope(final Scope parent) {
     return new AbstractScope(parent) {
       @Override
       public ScopeType type() {
@@ -2010,14 +2063,19 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
           public boolean isParameter() {
             return false;
           }
+
+          @Override
+          public boolean isGlobal() {
+            return false;
+          }
         };
       }
     };
   }
 
   private Scope makeGlobalScope() {
-    final Map<String, AbstractSymbol> globalSymbols = new LinkedHashMap<String, AbstractSymbol>();
-    final Map<String, String> caseInsensitiveNames = new LinkedHashMap<String, String>();
+    final Map<String, AbstractSymbol> globalSymbols = new LinkedHashMap<>();
+    final Map<String, String> caseInsensitiveNames = new LinkedHashMap<>();
     return new Scope() {
       
       @Override
@@ -2133,7 +2191,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
           } else if (hasSpecialUndeclaredVariables()) {
             return null;
           } else {
-            throw new Error("cannot find " + name);
+            throw new UnimplementedError("cannot find " + name);
           }
         }
 
@@ -2177,14 +2235,19 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
           public int valueNumber() {
             throw new UnsupportedOperationException();
           }
+
+          @Override
+          public boolean isGlobal() {
+            return true;
+          }
         });
       }
     };
   }
 
   protected Scope makeTypeScope(final CAstEntity type, final Scope parent) {
-    final Map<String, AbstractSymbol> typeSymbols = new LinkedHashMap<String, AbstractSymbol>();
-    final Map<String, String> caseInsensitiveNames = new LinkedHashMap<String, String>();
+    final Map<String, AbstractSymbol> typeSymbols = new LinkedHashMap<>();
+    final Map<String, String> caseInsensitiveNames = new LinkedHashMap<>();
     return new Scope() {
       private final String mapName(String nm) {
         String mappedName = caseInsensitiveNames.get(nm.toLowerCase());
@@ -2302,6 +2365,11 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
           public int valueNumber() {
             throw new UnsupportedOperationException();
           }
+
+          @Override
+          public boolean isGlobal() {
+            return false;
+          }
         });
       }
     };
@@ -2328,11 +2396,11 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
 
     UnwindState getUnwindState();
 
-    void setCatchType(IBasicBlock bb, TypeReference catchType);
+    void setCatchType(IBasicBlock<SSAInstruction> bb, TypeReference catchType);
 
     void setCatchType(CAstNode catchNode, TypeReference catchType);
 
-    Map<IBasicBlock,TypeReference[]> getCatchTypes();
+    Map<IBasicBlock<SSAInstruction>, TypeReference[]> getCatchTypes();
 
     void addEntityName(CAstEntity e, String name);
     
@@ -2415,7 +2483,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     }
 
     @Override
-    public void setCatchType(IBasicBlock bb, TypeReference catchType) {
+    public void setCatchType(IBasicBlock<SSAInstruction> bb, TypeReference catchType) {
       parent.setCatchType(bb, catchType);
     }
 
@@ -2425,7 +2493,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     }
 
     @Override
-    public Map<IBasicBlock, TypeReference[]> getCatchTypes() {
+    public Map<IBasicBlock<SSAInstruction>, TypeReference[]> getCatchTypes() {
       return parent.getCatchTypes();
     }
 
@@ -2530,7 +2598,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
 
     private final IncipientCFG cfg;
 
-    private final Map<IBasicBlock,TypeReference[]> catchTypes = HashMapFactory.make();
+    private final Map<IBasicBlock<SSAInstruction>, TypeReference[]> catchTypes = HashMapFactory.make();
 
     Set<Pair<Pair<String, String>, Integer>> exposedReads;
     Set<Pair<Pair<String, String>, Integer>> exposedWrites;
@@ -2541,7 +2609,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
      * maps nodes in the current function to the value number holding their value
      * or, for constants, to their constant value.
      */
-    private final Map<CAstNode, Integer> results = new LinkedHashMap<CAstNode, Integer>();
+    private final Map<CAstNode, Integer> results = new LinkedHashMap<>();
 
     public CodeEntityContext(WalkContext parent, Scope entityScope, CAstEntity s) {
       super(parent, s);
@@ -2617,14 +2685,14 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     }
 
     @Override
-    public void setCatchType(IBasicBlock bb, TypeReference catchType) {
+    public void setCatchType(IBasicBlock<SSAInstruction> bb, TypeReference catchType) {
       if (! catchTypes.containsKey(bb)) {
         catchTypes.put(bb, new TypeReference[] { catchType });
       } else {
         TypeReference[] data = catchTypes.get(bb);
 
-        for (int i = 0; i < data.length; i++) {
-          if (data[i] == catchType) {
+        for (TypeReference element : data) {
+          if (element == catchType) {
             return;
           }
         }
@@ -2638,7 +2706,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     }
 
     @Override
-    public Map<IBasicBlock,TypeReference[]> getCatchTypes() {
+    public Map<IBasicBlock<SSAInstruction>, TypeReference[]> getCatchTypes() {
       return catchTypes;
     }
     
@@ -2649,7 +2717,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
 
     @Override
     public final int setValue(CAstNode n, int v) {
-      results.put(n, new Integer(v));
+      results.put(n, Integer.valueOf(v));
       return v;
     }
 
@@ -2800,7 +2868,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
       readOnlyNames = original.readOnlyNames;
     }
 
-    private int[] buildLexicalUseArray(Pair<Pair<String, String>, Integer>[] exposedNames, String entityName) {
+    private static int[] buildLexicalUseArray(Pair<Pair<String, String>, Integer>[] exposedNames, String entityName) {
       if (exposedNames != null) {
         int[] lexicalUses = new int[exposedNames.length];
         for (int j = 0; j < exposedNames.length; j++) {
@@ -2817,7 +2885,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
       }
     }
 
-    private Pair<String, String>[] buildLexicalNamesArray(Pair<Pair<String, String>, Integer>[] exposedNames) {
+    private static Pair<String, String>[] buildLexicalNamesArray(Pair<Pair<String, String>, Integer>[] exposedNames) {
       if (exposedNames != null) {
         @SuppressWarnings("unchecked")
         Pair<String, String>[] lexicalNames = new Pair[exposedNames.length];
@@ -2831,7 +2899,6 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
       }
     }
 
-    @SuppressWarnings("unchecked")
     AstLexicalInformation(String entityName, Scope scope, SSAInstruction[] instrs,
         Set<Pair<Pair<String, String>, Integer>> exposedNamesForReadSet,
         Set<Pair<Pair<String, String>, Integer>> exposedNamesForWriteSet, Set<Access> accesses) {
@@ -2839,7 +2906,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
 
       Pair<Pair<String, String>, Integer>[] EN = null;
       if (exposedNamesForReadSet != null || exposedNamesForWriteSet != null) {
-        Set<Pair<Pair<String, String>, Integer>> exposedNamesSet = new HashSet<Pair<Pair<String, String>, Integer>>();
+        Set<Pair<Pair<String, String>, Integer>> exposedNamesSet = new HashSet<>();
         if (exposedNamesForReadSet != null) {
           exposedNamesSet.addAll(exposedNamesForReadSet);
         }
@@ -2850,7 +2917,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
       }
 
       if (exposedNamesForReadSet != null) {
-        Set<String> readOnlyNames = new HashSet<String>();
+        Set<String> readOnlyNames = new HashSet<>();
         for (Pair<Pair<String, String>, Integer> v : exposedNamesForReadSet) {
           if (entityName != null && entityName.equals(v.fst.snd)) {
             readOnlyNames.add(v.fst.fst);
@@ -2883,9 +2950,8 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
       }
 
       if (accesses != null) {
-        Set<String> parents = new LinkedHashSet<String>();
-        for (Iterator<Access> ACS = accesses.iterator(); ACS.hasNext();) {
-          Access AC = ACS.next();
+        Set<String> parents = new LinkedHashSet<>();
+        for (Access AC : accesses) {
           if (AC.variableDefiner != null) {
             parents.add(AC.variableDefiner);
           }
@@ -2931,18 +2997,18 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
       if (allExposedUses == null) {
         allExposedUses = IntSetUtil.make();
         if (exitLexicalUses != null) {
-          for (int i = 0; i < exitLexicalUses.length; i++) {
-            if (exitLexicalUses[i] > 0) {
-              allExposedUses.add(exitLexicalUses[i]);
+          for (int exitLexicalUse : exitLexicalUses) {
+            if (exitLexicalUse > 0) {
+              allExposedUses.add(exitLexicalUse);
             }
           }
         }
         if (instructionLexicalUses != null) {
-          for (int i = 0; i < instructionLexicalUses.length; i++) {
-            if (instructionLexicalUses[i] != null) {
-              for (int j = 0; j < instructionLexicalUses[i].length; j++) {
-                if (instructionLexicalUses[i][j] > 0) {
-                  allExposedUses.add(instructionLexicalUses[i][j]);
+          for (int[] instructionLexicalUse : instructionLexicalUses) {
+            if (instructionLexicalUse != null) {
+              for (int element : instructionLexicalUse) {
+                if (element > 0) {
+                  allExposedUses.add(element);
                 }
               }
             }
@@ -2985,7 +3051,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     
       return false;
     }
-  };
+  }
  
   /**
    * record that in entity e, the access is performed.
@@ -2996,7 +3062,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
    * used to update an instruction that performs all the accesses at the
    * beginning of the method and defines the locals.
    */
-  private void addAccess(WalkContext context, CAstEntity e, Access access) {
+  private static void addAccess(WalkContext context, CAstEntity e, Access access) {
     context.getAccesses(e).add(access);
   }
 
@@ -3019,7 +3085,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
    * @param valueNumber
    *          the name's value number in the scope of entity
    */
-  private void addExposedName(CAstEntity entity, CAstEntity declaration, String name, int valueNumber, boolean isWrite, WalkContext context) {
+  private static void addExposedName(CAstEntity entity, CAstEntity declaration, String name, int valueNumber, boolean isWrite, WalkContext context) {
     Pair<Pair<String, String>, Integer> newVal = Pair.make(Pair.make(name, context.getEntityName(declaration)), valueNumber);
     context.exposeNameSet(entity, isWrite).add(newVal);
   }
@@ -3109,12 +3175,12 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
       return ConditionalBranchInstruction.Operator.NE;
 
     else {
-      Assertions.UNREACHABLE("cannot translate " + CAstPrinter.print(op));
+      assert false : "cannot translate " + CAstPrinter.print(op);
       return null;
     }
   }
 
-  protected String[] makeNameMap(CAstEntity n, Set<Scope> scopes, SSAInstruction[] insts) {
+  protected String[] makeNameMap(CAstEntity n, Set<Scope> scopes, @SuppressWarnings("unused") SSAInstruction[] insts) {
     // all scopes share the same underlying symtab, which is what
     // size really refers to.
     String[] map = new String[scopes.iterator().next().size() + 1];
@@ -3123,10 +3189,8 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
       System.err.println(("names array of size " + map.length));
     }
 
-    for (Iterator<Scope> S = scopes.iterator(); S.hasNext();) {
-      Scope scope = S.next();
-      for (Iterator<String> I = scope.getAllNames(); I.hasNext();) {
-        String nm = I.next();
+    for (Scope scope : scopes) {
+      for (String nm : Iterator2Iterable.make(scope.getAllNames())) {
         
         if (ignoreName(nm)) {
           continue;
@@ -3156,7 +3220,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     return map;
   }
 
-  protected final CAstType getTypeForNode(WalkContext context, CAstNode node) {
+  protected final static CAstType getTypeForNode(WalkContext context, CAstNode node) {
     if (context.top().getNodeTypeMap() != null) {
       return context.top().getNodeTypeMap().getNodeType(node);
     } else {
@@ -3254,8 +3318,10 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
   protected boolean visitFunctionEntity(CAstEntity n, WalkContext context, WalkContext codeContext, CAstVisitor<WalkContext> visitor) {
     if (n.getAST() == null) // presumably abstract
       declareFunction(n, context);
-    else
-      initFunctionEntity(n, context, codeContext);
+    else {
+      declareFunction(n, context);
+      initFunctionEntity(n, codeContext);
+    }
     return false;
   }
 
@@ -3273,7 +3339,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
   @Override
   protected boolean visitScriptEntity(CAstEntity n, WalkContext context, WalkContext codeContext, CAstVisitor<WalkContext> visitor) {
     declareFunction(n, codeContext);
-    initFunctionEntity(n, context, codeContext);
+    initFunctionEntity(n, codeContext);
     return false;
   }
 
@@ -3282,7 +3348,15 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     closeFunctionEntity(n, context, codeContext);
   }
 
-  public void initFunctionEntity(final CAstEntity n, WalkContext parentContext, WalkContext functionContext) {
+  public void initFunctionEntity(CAstEntity n, WalkContext functionContext) {
+    if (liftDeclarationsForLexicalScoping()) {
+      Set<String> names = entity2ExposedNames.get(n);
+      if (names != null) {
+        names.forEach((String nm) -> {
+          functionContext.currentScope().declare(new CAstSymbolImpl(nm, CAstType.DYNAMIC));
+        });
+      }
+    }
     // entry block
     functionContext.cfg().makeEntryBlock(functionContext.cfg().newBlock(false));
     // first real block
@@ -3297,9 +3371,10 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
 
     // create code entry stuff for this entity
     SymbolTable symtab = ((AbstractScope) functionContext.currentScope()).getUnderlyingSymtab();
-    Map<IBasicBlock,TypeReference[]> catchTypes = functionContext.getCatchTypes();
+    Map<IBasicBlock<SSAInstruction>,TypeReference[]> catchTypes = functionContext.getCatchTypes();
     AstCFG cfg = new AstCFG(n, functionContext.cfg(), symtab, insts);
     Position[] line = functionContext.cfg().getLinePositionMap();
+    Position[][] operand = functionContext.cfg().getOperandPositionMap();
     boolean katch = functionContext.cfg().hasCatchBlock();
     boolean monitor = functionContext.cfg().hasMonitorOp();
     String[] nms = makeNameMap(n, functionContext.entityScopes(), cfg.getInstructions());
@@ -3318,15 +3393,19 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
         functionContext.exposeNameSet(n, true), 
         functionContext.getAccesses(n));
 
-    DebuggingInformation DBG = new AstDebuggingInformation(n.getPosition(), line, nms);
+    Position[] parameterPositions = getParameterPositions(n);
+    
+    DebuggingInformation DBG = new AstDebuggingInformation(n.getNamePosition(), n.getPosition(), line, operand, parameterPositions, nms);
 
     // actually make code body
     defineFunction(n, parentContext, cfg, symtab, katch, catchTypes, monitor, LI, DBG);
   }
 
+  protected abstract Position[] getParameterPositions(CAstEntity e);
+  
   @Override
   protected WalkContext makeLocalContext(WalkContext context, CAstNode n) {
-    return new LocalContext(context, makeLocalScope(n, context.currentScope()));
+    return new LocalContext(context, makeLocalScope(context.currentScope()));
   }
 
   
@@ -3497,7 +3576,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
         + " of loop " + CAstPrinter.print(n, context.top().getSourceMap());
     context.cfg().addInstruction(
         insts.ConditionalBranchInstruction(context.cfg().currentInstruction, translateConditionOpcode(CAstOperator.OP_EQ), null, c.getValue(n.getChild(0)), context
-            .currentScope().getConstantValue(new Integer(0)), -1));
+            .currentScope().getConstantValue(Integer.valueOf(0)), -1));
     PreBasicBlock branchB = context.cfg().getCurrentBlock();
 
     // loop body
@@ -3627,17 +3706,23 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     return false;
   }
 
-  private boolean handleBinaryOpThrow(CAstNode n, CAstNode op, WalkContext context) {
-    // currently, only integer / and % throw exceptions
-    boolean mayBeInteger = false;
-    Collection labels = context.getControlFlow().getTargetLabels(n);
-    if (!labels.isEmpty()) {
-      context.cfg().addPreNode(n, context.getUnwindState());
-
-      mayBeInteger = true;
+  private static boolean handleBinaryOpThrow(CAstNode n, CAstNode op, WalkContext context) {
+    boolean mayBeInteger = handlePossibleThrow(n, context);
+    if (mayBeInteger) {
+      // currently, only integer / and % throw exceptions
       assert op == CAstOperator.OP_DIV || op == CAstOperator.OP_MOD : CAstPrinter.print(n);
-      for (Iterator iter = labels.iterator(); iter.hasNext();) {
-        Object label = iter.next();
+    }
+    return mayBeInteger;
+  }
+  
+  private static boolean handlePossibleThrow(CAstNode n, WalkContext context) {
+    boolean mayThrow = false;
+    Collection<Object> labels = context.getControlFlow().getTargetLabels(n);
+    if (!labels.isEmpty()) {
+       mayThrow = true;
+
+      context.cfg().addPreNode(n, context.getUnwindState());
+      for (Object label : labels) {
         CAstNode target = context.getControlFlow().getTarget(n, label);
         if (target == CAstControlFlowMap.EXCEPTION_TO_EXIT)
           context.cfg().addPreEdgeToExit(n, true);
@@ -3646,7 +3731,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
       }
     }
 
-    return mayBeInteger;
+    return mayThrow;
   }
 
   @Override
@@ -3660,10 +3745,12 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
 
     boolean mayBeInteger = handleBinaryOpThrow(n, n.getChild(0), context);
 
+    int currentInstruction = context.cfg().currentInstruction;
     context.cfg().addInstruction(
-        insts.BinaryOpInstruction(context.cfg().currentInstruction, translateBinaryOpcode(n.getChild(0)), false, false, result, c.getValue(l), c.getValue(r),
+        insts.BinaryOpInstruction(currentInstruction, translateBinaryOpcode(n.getChild(0)), false, false, result, c.getValue(l), c.getValue(r),
             mayBeInteger));
-
+    context.cfg().noteOperands(currentInstruction, context.getSourceMap().getPosition(l), context.getSourceMap().getPosition(r));
+    
     if (mayBeInteger) {
       context.cfg().newBlock(true);
     }
@@ -3682,7 +3769,9 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     WalkContext context = c;
     int result = c.getValue(n);
     CAstNode v = n.getChild(1);
-    context.cfg().addInstruction(insts.UnaryOpInstruction(context.cfg().currentInstruction, translateUnaryOpcode(n.getChild(0)), result, c.getValue(v)));
+    int currentInstruction = context.cfg().currentInstruction;
+    context.cfg().addInstruction(insts.UnaryOpInstruction(currentInstruction, translateUnaryOpcode(n.getChild(0)), result, c.getValue(v)));
+    context.cfg().noteOperands(currentInstruction, context.getSourceMap().getPosition(v));
   }
 
   @Override
@@ -3697,8 +3786,11 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
   protected void leaveArrayLength(CAstNode n, WalkContext c, CAstVisitor<WalkContext> visitor) {
     WalkContext context = c;
     int result = c.getValue(n);
-    int arrayValue = c.getValue(n.getChild(0));
-    context.cfg().addInstruction(insts.ArrayLengthInstruction(context.cfg().currentInstruction, result, arrayValue));
+    CAstNode arrayExpr = n.getChild(0);
+    int arrayValue = c.getValue(arrayExpr);
+    int currentInstruction = context.cfg().currentInstruction;
+    context.cfg().addInstruction(insts.ArrayLengthInstruction(currentInstruction, result, arrayValue));
+    context.cfg().noteOperands(currentInstruction, context.getSourceMap().getPosition(arrayExpr));
   }
 
   @Override
@@ -3751,10 +3843,13 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
   @Override
   protected void leaveReturn(CAstNode n, WalkContext c, CAstVisitor<WalkContext> visitor) {
     WalkContext context = c;
+    int currentInstruction = context.cfg().currentInstruction;
     if (n.getChildCount() > 0) {
-      context.cfg().addInstruction(insts.ReturnInstruction(context.cfg().currentInstruction, c.getValue(n.getChild(0)), false));
+      CAstNode returnExpr = n.getChild(0);
+      context.cfg().addInstruction(insts.ReturnInstruction(currentInstruction, c.getValue(returnExpr), false));
+      context.cfg().noteOperands(currentInstruction, context.getSourceMap().getPosition(returnExpr));
     } else {
-      context.cfg().addInstruction(insts.ReturnInstruction(context.cfg().currentInstruction));
+      context.cfg().addInstruction(insts.ReturnInstruction(currentInstruction));
     }
 
     context.cfg().addPreNode(n, context.getUnwindState());
@@ -3770,14 +3865,21 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
   @Override
   protected void leaveIfgoto(CAstNode n, WalkContext c, CAstVisitor<WalkContext> visitor) {
     WalkContext context = c;
+    int currentInstruction = context.cfg().currentInstruction;
     if (n.getChildCount() == 1) {
+      CAstNode arg = n.getChild(0);
       context.cfg().addInstruction(
-          insts.ConditionalBranchInstruction(context.cfg().currentInstruction, translateConditionOpcode(CAstOperator.OP_NE), null, c.getValue(n.getChild(0)), context
-              .currentScope().getConstantValue(new Integer(0)), -1));
+          insts.ConditionalBranchInstruction(currentInstruction, translateConditionOpcode(CAstOperator.OP_NE), null, c.getValue(arg), context
+              .currentScope().getConstantValue(Integer.valueOf(0)), -1));
+      context.cfg().noteOperands(currentInstruction, context.getSourceMap().getPosition(arg));
     } else if (n.getChildCount() == 3) {
+      CAstNode op = n.getChild(0);
+      CAstNode leftExpr = n.getChild(1);
+      CAstNode rightExpr = n.getChild(2);
       context.cfg().addInstruction(
-          insts.ConditionalBranchInstruction(context.cfg().currentInstruction, translateConditionOpcode(n.getChild(0)), null, c.getValue(n.getChild(1)),
-              c.getValue(n.getChild(2)), -1));
+          insts.ConditionalBranchInstruction(currentInstruction, translateConditionOpcode(op), null, c.getValue(leftExpr),
+              c.getValue(rightExpr), -1));
+      context.cfg().noteOperands(currentInstruction, context.getSourceMap().getPosition(leftExpr), context.getSourceMap().getPosition(rightExpr));
     } else {
       Assertions.UNREACHABLE();
     }
@@ -3798,10 +3900,11 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     WalkContext context = c;
     if (!context.cfg().isDeadBlock(context.cfg().getCurrentBlock())) {
       context.cfg().addPreNode(n, context.getUnwindState());
-           context.cfg().addPreEdge(n, context.getControlFlow().getTarget(n, null), false);
+      CAstControlFlowMap controlFlowMap = context.getControlFlow();
+      context.cfg().addPreEdge(n, controlFlowMap.getTarget(n, null), false);
       context.cfg().addInstruction(insts.GotoInstruction(context.cfg().currentInstruction, -1));            
-      if (context.getControlFlow().getTarget(n, null) == null) {
-        assert context.getControlFlow().getTarget(n, null) != null : context.getControlFlow() + " does not map " + n + " ("
+      if (controlFlowMap.getTarget(n, null) == null) {
+        assert controlFlowMap.getTarget(n, null) != null : controlFlowMap + " does not map " + n + " ("
             + context.getSourceMap().getPosition(n) + ")";
       }
       context.cfg().newBlock(false);
@@ -3809,7 +3912,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
   }
 
   @Override
-  protected boolean visitLabelStmt(CAstNode n, WalkContext c, CAstVisitor<WalkContext> visitor) {
+  protected boolean visitLabelStmt(CAstNode n, WalkContext c, CAstVisitor<WalkContext> visitor) {    
     WalkContext context = c;
     if (!context.getControlFlow().getSourceNodes(n).isEmpty()) {
       context.cfg().newBlock(true);
@@ -3828,16 +3931,21 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     // conditional
     CAstNode l = n.getChild(0);
     visitor.visit(l, context, visitor);
+    int currentInstruction = context.cfg().getCurrentInstruction();
     context.cfg().addInstruction(
-        insts.ConditionalBranchInstruction(context.cfg().currentInstruction, translateConditionOpcode(CAstOperator.OP_EQ), null, c.getValue(l), context.currentScope()
-            .getConstantValue(new Integer(0)), -1));
+        insts.ConditionalBranchInstruction(currentInstruction, translateConditionOpcode(CAstOperator.OP_EQ), null, c.getValue(l), context.currentScope()
+            .getConstantValue(Integer.valueOf(0)), -1));
+    context.cfg().noteOperands(currentInstruction, context.getSourceMap().getPosition(l));
     PreBasicBlock srcB = context.cfg().getCurrentBlock();
     // true clause
     context.cfg().newBlock(true);
     CAstNode r = n.getChild(1);
     visitor.visit(r, context, visitor);
-    if (isExpr)
-      context.cfg().addInstruction(new AssignInstruction(context.cfg().currentInstruction, c.getValue(n), c.getValue(r)));
+    if (isExpr) {
+      currentInstruction = context.cfg().getCurrentInstruction();
+      context.cfg().addInstruction(new AssignInstruction(currentInstruction, c.getValue(n), c.getValue(r)));
+      context.cfg().noteOperands(currentInstruction, context.getSourceMap().getPosition(r));
+    }
     if (n.getChildCount() == 3) {
       if (!context.cfg().isDeadBlock(context.cfg().getCurrentBlock())) {
         context.cfg().addInstruction(insts.GotoInstruction(context.cfg().currentInstruction, -1));
@@ -3849,9 +3957,13 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
 
       falseB = context.cfg().getCurrentBlock();
       CAstNode f = n.getChild(2);
+      context.cfg().deadBlocks.remove(falseB);
       visitor.visit(f, context, visitor);
-      if (isExpr)
-        context.cfg().addInstruction(new AssignInstruction(context.cfg().currentInstruction, c.getValue(n), c.getValue(f)));
+      if (isExpr) {
+        currentInstruction = context.cfg().currentInstruction;
+        context.cfg().addInstruction(new AssignInstruction(currentInstruction, c.getValue(n), c.getValue(f)));
+        context.cfg().noteOperands(currentInstruction, context.getSourceMap().getPosition(f));
+      }
     }
 
     // end
@@ -3938,7 +4050,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
   protected void leaveObjectLiteralFieldInit(CAstNode n, int i, WalkContext c, CAstVisitor<WalkContext> visitor) {
     WalkContext context = c;
     if (n.getChild(i).getKind() == CAstNode.EMPTY) {
-      handleUnspecifiedLiteralKey(context, n, i, visitor);
+      handleUnspecifiedLiteralKey();
     }
     doFieldWrite(context, c.getValue(n.getChild(0)), n.getChild(i), n, c.getValue(n.getChild(i + 1)));
   }
@@ -3962,7 +4074,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
   protected void leaveArrayLiteralInitElement(CAstNode n, int i, WalkContext c, CAstVisitor<WalkContext> visitor) {
     WalkContext context = c;
     arrayOpHandler.doArrayWrite(context, c.getValue(n.getChild(0)), n,
-        new int[] { context.currentScope().getConstantValue(new Integer(i - 1)) }, c.getValue(n.getChild(i)));
+        new int[] { context.currentScope().getConstantValue(Integer.valueOf(i - 1)) }, c.getValue(n.getChild(i)));
   }
 
   @Override
@@ -3999,7 +4111,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     }
   }
 
-  private int[] gatherArrayDims(WalkContext c, CAstNode n) {
+  private static int[] gatherArrayDims(WalkContext c, CAstNode n) {
     int numDims = n.getChildCount() - 2;
     int[] dims = new int[numDims];
     for (int i = 0; i < numDims; i++)
@@ -4008,7 +4120,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
   }
 
   /* Prereq: a.getKind() == ASSIGN_PRE_OP || a.getKind() == ASSIGN_POST_OP */
-  protected int processAssignOp(CAstNode n, CAstNode v, CAstNode a, int temp, boolean post, WalkContext c) {
+  protected int processAssignOp(CAstNode v, CAstNode a, int temp, WalkContext c) {
     WalkContext context = c;
     int rval = c.getValue(v);
     CAstNode op = a.getChild(2);
@@ -4016,9 +4128,11 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
 
     boolean mayBeInteger = handleBinaryOpThrow(a, op, context);
 
+    int currentInstruction = context.cfg().getCurrentInstruction();
     context.cfg().addInstruction(
-        insts.BinaryOpInstruction(context.cfg().currentInstruction, translateBinaryOpcode(op), false, false, temp2, temp, rval, mayBeInteger));
-
+        insts.BinaryOpInstruction(currentInstruction, translateBinaryOpcode(op), false, false, temp2, temp, rval, mayBeInteger));
+    context.cfg().noteOperands(currentInstruction, context.getSourceMap().getPosition(a.getChild(0)), context.getSourceMap().getPosition(v));
+    
     if (mayBeInteger) {
       context.cfg().newBlock(true);
     }
@@ -4050,7 +4164,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     int temp = context.currentScope().allocateTempValue();
     int[] dims = gatherArrayDims(c, n);
     arrayOpHandler.doArrayRead(context, temp, c.getValue(n.getChild(0)), n, dims);
-    int rval = processAssignOp(n, v, a, temp, !pre, c);
+    int rval = processAssignOp(v, a, temp, c);
     c.setValue(n, pre ? rval : temp);
     arrayOpHandler.doArrayWrite(context, c.getValue(n.getChild(0)), n, dims, rval);
   }
@@ -4068,9 +4182,6 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     doFieldWrite(context, c.getValue(n.getChild(0)), n.getChild(1), n, rval);
   }
 
-  protected void processObjectRefAssignOp(CAstNode n, CAstNode v, CAstNode a, WalkContext c) {
-  }
-
   @Override
   protected boolean visitObjectRefAssignOp(CAstNode n, CAstNode v, CAstNode a, boolean pre, WalkContext c, CAstVisitor<WalkContext> visitor) { /* empty */
     return false;
@@ -4081,7 +4192,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     WalkContext context = c;
     int temp = context.currentScope().allocateTempValue();
     doFieldRead(context, temp, c.getValue(n.getChild(0)), n.getChild(1), n);
-    int rval = processAssignOp(n, v, a, temp, !pre, c);
+    int rval = processAssignOp(v, a, temp, c);
     c.setValue(n, pre ? rval : temp);
     doFieldWrite(context, c.getValue(n.getChild(0)), n.getChild(1), n, rval);
   }
@@ -4158,11 +4269,13 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
 
     if (!pre) {
       int ret = context.currentScope().allocateTempValue();
-      context.cfg().addInstruction(new AssignInstruction(context.cfg().currentInstruction, ret, temp));
+      int currentInstruction = context.cfg().getCurrentInstruction();
+      context.cfg().addInstruction(new AssignInstruction(currentInstruction, ret, temp));
+      context.cfg().noteOperands(currentInstruction, context.getSourceMap().getPosition(n.getChild(0)));
       c.setValue(n, ret);
     }
 
-    int rval = processAssignOp(n, v, a, temp, !pre, c);
+    int rval = processAssignOp(v, a, temp, c);
 
     if (pre) {
       c.setValue(n, rval);
@@ -4177,12 +4290,10 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     }
   }
 
-  private boolean isSimpleSwitch(CAstNode n, WalkContext context, CAstVisitor<WalkContext> visitor) {
+  private static boolean isSimpleSwitch(CAstNode n, WalkContext context, CAstVisitor<WalkContext> visitor) {
     CAstControlFlowMap ctrl = context.getControlFlow();
-    Collection caseLabels = ctrl.getTargetLabels(n);
-    for (Iterator kases = caseLabels.iterator(); kases.hasNext();) {
-      Object x = kases.next();
-
+    Collection<Object> caseLabels = ctrl.getTargetLabels(n);
+    for (Object x : caseLabels) {
       if (x == CAstControlFlowMap.SWITCH_DEFAULT)
         continue;
 
@@ -4218,7 +4329,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
 
     boolean hasExplicitDefault = ctrl.getTarget(n, CAstControlFlowMap.SWITCH_DEFAULT) != null;
 
-    Collection caseLabels = ctrl.getTargetLabels(n);
+    Collection<Object> caseLabels = ctrl.getTargetLabels(n);
     int cases = caseLabels.size();
     if (hasExplicitDefault)
       cases--;
@@ -4226,7 +4337,9 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
 
     int defaultBlock = context.cfg().getCurrentBlock().getGraphNodeId() + 1;
 
-    context.cfg().addInstruction(insts.SwitchInstruction(context.cfg().currentInstruction, v, defaultBlock, casesAndLabels));
+    int currentInstruction = context.cfg().getCurrentInstruction();
+    context.cfg().addInstruction(insts.SwitchInstruction(currentInstruction, v, defaultBlock, casesAndLabels));
+    context.cfg().noteOperands(currentInstruction, context.getSourceMap().getPosition(switchValue));
     context.cfg().addPreNode(n, context.getUnwindState());
     // PreBasicBlock switchB = context.cfg().getCurrentBlock();
     context.cfg().newBlock(true);
@@ -4244,8 +4357,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     }
 
     int cn = 0;
-    for (Iterator kases = caseLabels.iterator(); kases.hasNext();) {
-      Object x = kases.next();
+    for (Object x : caseLabels) {
       CAstNode target = ctrl.getTarget(n, x);
       if (x == CAstControlFlowMap.SWITCH_DEFAULT) {
         context.cfg().addEdge(defaultHackBlock, context.cfg().getBlock(target));
@@ -4269,13 +4381,14 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     int v = context.getValue(switchValue);
 
     Collection<Object> caseLabels = ctrl.getTargetLabels(n);
-    Map<Object, PreBasicBlock> labelToBlock = new LinkedHashMap<Object, PreBasicBlock>();
-    for (Iterator kases = caseLabels.iterator(); kases.hasNext();) {
-      Object x = kases.next();
+    Map<Object, PreBasicBlock> labelToBlock = new LinkedHashMap<>();
+    for (Object x : caseLabels) {
       if (x != CAstControlFlowMap.SWITCH_DEFAULT) {
         visitor.visit((CAstNode) x, context, visitor);
+        int currentInstruction = context.cfg().getCurrentInstruction();
         context.cfg().addInstruction(
-            insts.ConditionalBranchInstruction(context.cfg().currentInstruction, translateConditionOpcode(CAstOperator.OP_EQ), null, v, context.getValue((CAstNode) x), -1));
+            insts.ConditionalBranchInstruction(currentInstruction, translateConditionOpcode(CAstOperator.OP_EQ), null, v, context.getValue((CAstNode) x), -1));
+        context.cfg().noteOperands(currentInstruction, context.getSourceMap().getPosition(switchValue), context.getSourceMap().getPosition((CAstNode)x));
         labelToBlock.put(x, context.cfg().getCurrentBlock());
         context.cfg().newBlock(true);
       }
@@ -4289,8 +4402,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     visitor.visit(switchBody, context, visitor);
     context.cfg().newBlock(true);
 
-    for (Iterator kases = caseLabels.iterator(); kases.hasNext();) {
-      Object x = kases.next();
+    for (Object x : caseLabels) {
       if (x != CAstControlFlowMap.SWITCH_DEFAULT) {
         CAstNode target = ctrl.getTarget(n, x);
         context.cfg().addEdge(labelToBlock.get(x), context.cfg().getBlock(target));
@@ -4338,9 +4450,8 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     context.cfg().addPreNode(n, context.getUnwindState());
     context.cfg().newBlock(false);
 
-    Collection labels = context.getControlFlow().getTargetLabels(n);
-    for (Iterator iter = labels.iterator(); iter.hasNext();) {
-      Object label = iter.next();
+    Collection<Object> labels = context.getControlFlow().getTargetLabels(n);
+    for (Object label : labels) {
       CAstNode target = context.getControlFlow().getTarget(n, label);
       if (target == CAstControlFlowMap.EXCEPTION_TO_EXIT)
         context.cfg().addPreEdgeToExit(n, true);
@@ -4499,13 +4610,16 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
   protected void leaveAssert(CAstNode n, WalkContext c, CAstVisitor<WalkContext> visitor) {
     WalkContext context = c;
     boolean fromSpec = true;
-    int result = c.getValue(n.getChild(0));
+    CAstNode assertion = n.getChild(0);
+    int result = c.getValue(assertion);
     if (n.getChildCount() == 2) {
       assert n.getChild(1).getKind() == CAstNode.CONSTANT;
       assert n.getChild(1).getValue() instanceof Boolean;
       fromSpec = n.getChild(1).getValue().equals(Boolean.TRUE);
     }
-    context.cfg().addInstruction(new AstAssertInstruction(context.cfg().currentInstruction, result, fromSpec));
+    int currentInstruction = context.cfg().currentInstruction;
+    context.cfg().addInstruction(new AstAssertInstruction(currentInstruction, result, fromSpec));
+    context.cfg().noteOperands(currentInstruction, context.getSourceMap().getPosition(assertion));
   }
 
   @Override
@@ -4517,7 +4631,13 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
   protected void leaveEachElementGet(CAstNode n, WalkContext c, CAstVisitor<WalkContext> visitor) {
     int result = c.currentScope().allocateTempValue();
     c.setValue(n, result);
-    c.cfg().addInstruction(new EachElementGetInstruction(c.cfg().currentInstruction, result, c.getValue(n.getChild(0)), c.getValue(n.getChild(1))));
+    int currentInstruction = c.cfg().getCurrentInstruction();
+    c.cfg().addInstruction(new EachElementGetInstruction(currentInstruction, result, c.getValue(n.getChild(0)), c.getValue(n.getChild(1))));
+    c.cfg().noteOperands(currentInstruction, c.getSourceMap().getPosition(n.getChild(0)), c.getSourceMap().getPosition(n.getChild(1)));
+
+    if (handlePossibleThrow(n, c)) {
+      c.cfg().newBlock(true);
+    }
   }
 
   @Override
@@ -4529,7 +4649,9 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
   protected void leaveEachElementHasNext(CAstNode n, WalkContext c, CAstVisitor<WalkContext> visitor) {
     int result = c.currentScope().allocateTempValue();
     c.setValue(n, result);
-    c.cfg().addInstruction(new EachElementHasNextInstruction(c.cfg().currentInstruction, result, c.getValue(n.getChild(0)), c.getValue(n.getChild(1))));
+    int currentInstruction = c.cfg().getCurrentInstruction();
+    c.cfg().addInstruction(new EachElementHasNextInstruction(currentInstruction, result, c.getValue(n.getChild(0)), c.getValue(n.getChild(1))));
+    c.cfg().noteOperands(currentInstruction, c.getSourceMap().getPosition(n.getChild(0)), c.getSourceMap().getPosition(n.getChild(1)));
   }
 
   @Override
@@ -4559,11 +4681,14 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
   @Override
   protected void leaveIsDefinedExpr(CAstNode n, WalkContext c, CAstVisitor<WalkContext> visitor) {
     WalkContext wc = c;
-    int ref = c.getValue(n.getChild(0));
+    CAstNode refExpr = n.getChild(0);
+    int ref = c.getValue(refExpr);
     int result = wc.currentScope().allocateTempValue();
     c.setValue(n, result);
     if (n.getChildCount() == 1) {
-      wc.cfg().addInstruction(new AstIsDefinedInstruction(wc.cfg().currentInstruction, result, ref));
+      int currentInstruction = wc.cfg().getCurrentInstruction();
+      wc.cfg().addInstruction(new AstIsDefinedInstruction(currentInstruction, result, ref));
+      wc.cfg().noteOperands(currentInstruction, wc.getSourceMap().getPosition(refExpr));
     } else {
       doIsFieldDefined(wc, result, ref, n.getChild(1));
     }
@@ -4579,17 +4704,42 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     WalkContext wc = c;
 
     int rvals[] = new int[n.getChildCount()];
+    Position rposs[] = new Position[n.getChildCount()];
     for (int i = 0; i < n.getChildCount(); i++) {
       rvals[i] = c.getValue(n.getChild(i));
+      rposs[i] = c.getSourceMap().getPosition(n.getChild(i));
     }
 
-    wc.cfg().addInstruction(new AstEchoInstruction(wc.cfg().currentInstruction, rvals));
+    int currentInstruction = wc.cfg().getCurrentInstruction();
+    wc.cfg().addInstruction(new AstEchoInstruction(currentInstruction, rvals));
+    wc.cfg().noteOperands(currentInstruction, rposs);
+  }
+
+  @Override
+  protected boolean visitYield(CAstNode n, WalkContext c, CAstVisitor<WalkContext> visitor) {
+    return false;
+  }
+
+  @Override
+  protected void leaveYield(CAstNode n, WalkContext c, CAstVisitor<WalkContext> visitor) {
+    WalkContext wc = c;
+
+    int rvals[] = new int[n.getChildCount()];
+    Position rposs[] = new Position[n.getChildCount()];
+    for (int i = 0; i < n.getChildCount(); i++) {
+      rvals[i] = c.getValue(n.getChild(i));
+      rposs[i] = c.getSourceMap().getPosition(n.getChild(i));
+    }
+
+    int currentInstruction = wc.cfg().getCurrentInstruction();
+    wc.cfg().addInstruction(new AstYieldInstruction(currentInstruction, rvals));
+    wc.cfg().noteOperands(currentInstruction, rposs);
   }
 
   public CAstEntity getIncludedEntity(CAstNode n) {
     if (n.getChild(0).getKind() == CAstNode.NAMED_ENTITY_REF) {
       assert namedEntityResolver != null;
-      return (CAstEntity) namedEntityResolver.get(n.getChild(0).getChild(0).getValue());
+      return namedEntityResolver.get(n.getChild(0).getChild(0).getValue());
     } else {
       return (CAstEntity) n.getChild(0).getValue();
     }
@@ -4635,7 +4785,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
             nodeMap.put(Pair.make(root, c.key()), expr);
             return expr;
           } else {
-            return super.copyNodesHackForEclipse(root, cfg, c, nodeMap);
+            return super.copyNodes(root, cfg, c, nodeMap);
           }
         }
       }).rewrite(included);
@@ -4672,7 +4822,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
 
     private final ModuleEntry module;
 
-    private final Map<CAstEntity, String> entityNames = new LinkedHashMap<CAstEntity, String>();
+    private final Map<CAstEntity, String> entityNames = new LinkedHashMap<>();
 
    public RootContext(CAstEntity N, ModuleEntry module) {
       this.N = N;
@@ -4731,7 +4881,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     }
 
     @Override
-    public void setCatchType(IBasicBlock bb, TypeReference catchType) {
+    public void setCatchType(IBasicBlock<SSAInstruction> bb, TypeReference catchType) {
     }
 
     @Override
@@ -4739,7 +4889,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     }
 
     @Override
-    public Map<IBasicBlock, TypeReference[]> getCatchTypes() {
+    public Map<IBasicBlock<SSAInstruction>, TypeReference[]> getCatchTypes() {
       return null;
     }
     
@@ -4793,7 +4943,7 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
       return globalScope;
     }
     
-  };
+  }
 
   /**
    * translate module, represented by {@link CAstEntity} N
@@ -4805,6 +4955,9 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
     // this.inlinedSourceMap = inlinedSourceMap;
     final ExposedNamesCollector exposedNamesCollector = new ExposedNamesCollector();
     exposedNamesCollector.run(N);
+    if (liftDeclarationsForLexicalScoping()) {
+      exposedNamesCollector.run(N);      
+    }
     entity2ExposedNames = exposedNamesCollector.getEntity2ExposedNames();
     // CAstEntity rewrite = (new ExposedParamRenamer(new CAstImpl(),
     // entity2ExposedNames)).rewrite(N);
@@ -4814,6 +4967,9 @@ public abstract class AstTranslator extends CAstVisitor<AstTranslator.WalkContex
   public void translate(final CAstEntity N, final WalkContext context) {
     final ExposedNamesCollector exposedNamesCollector = new ExposedNamesCollector();
     exposedNamesCollector.run(N);
+    if (liftDeclarationsForLexicalScoping()) {
+      exposedNamesCollector.run(N);      
+    }
     entity2ExposedNames = exposedNamesCollector.getEntity2ExposedNames();
     walkEntities(N, context);
   }

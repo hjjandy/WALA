@@ -23,8 +23,9 @@ import com.ibm.wala.util.collections.Pair;
 /**
  * Represents the JavaScript global object.  
  * 
- * @see JSSSAPropagationCallGraphBuilder
+ * @see com.ibm.wala.cast.js.ipa.callgraph.JSSSAPropagationCallGraphBuilder
  */
+@SuppressWarnings("javadoc")
 public class GlobalObjectKey implements InstanceKey {
 
   private final IClass concreteType;

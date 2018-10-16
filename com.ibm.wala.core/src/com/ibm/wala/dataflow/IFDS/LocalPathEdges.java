@@ -33,11 +33,11 @@ public class LocalPathEdges {
   private final static boolean PARANOID = false;
 
   /**
-   * A map from integer (d2) -> (IBinaryNonNegativeIntRelation)
+   * A map from integer (d2) -&gt; (IBinaryNonNegativeIntRelation)
    * 
-   * For fact d2, paths[d2] gives a relation R=(n,d1) s.t. (<s_p, d1> -> <n,d2>) is a path edge.
+   * For fact d2, paths[d2] gives a relation R=(n,d1) s.t. (&lt;s_p, d1&gt; -&gt; &lt;n,d2&gt;) is a path edge.
    * 
-   * Note that we handle paths of the form <s_p, d1> -> <n,d1> specially, below. We also handle paths of the form <s_p, 0> -> <n,
+   * Note that we handle paths of the form &lt;s_p, d1&gt; -&gt; &lt;n,d1&gt; specially, below. We also handle paths of the form &lt;s_p, 0&gt; -&gt; &lt;n,
    * d1> specially below.
    * 
    * We choose this somewhat convoluted representation for the following reasons: 1) of the (n, d1, d2) tuple-space, we expect the
@@ -50,7 +50,7 @@ public class LocalPathEdges {
    * TODO: more representation optimization. A special representation for triples? sparse representations for CFG? exploit shorts
    * for ints?
    */
-  private final SparseVector<IBinaryNaturalRelation> paths = new SparseVector<IBinaryNaturalRelation>(1, 1.1f);
+  private final SparseVector<IBinaryNaturalRelation> paths = new SparseVector<>(1, 1.1f);
 
   /**
    * If this is non-null, it holds a redundant representation of the paths information, designed to make getReachable(II) faster.
@@ -58,9 +58,9 @@ public class LocalPathEdges {
    * space or time of the non-merging IFDS solver, for which the original paths representation works well. Is there a better data
    * structure tradeoff?
    * 
-   * A map from integer (d1) -> (IBinaryNonNegativeIntRelation)
+   * A map from integer (d1) -&gt; (IBinaryNonNegativeIntRelation)
    * 
-   * For fact d1, paths[d1] gives a relation R=(n,d2) s.t. (<s_p, d1> -> <n,d2>) is a path edge.
+   * For fact d1, paths[d1] gives a relation R=(n,d2) s.t. (&lt;s_p, d1&gt; -&gt; &lt;n,d2&gt;) is a path edge.
    * 
    * 
    * We choose this somewhat convoluted representation for the following reasons: 1) of the (n, d1, d2) tuple-space, we expect the
@@ -71,24 +71,24 @@ public class LocalPathEdges {
   private final SparseVector<IBinaryNaturalRelation> altPaths;
 
   /**
-   * a map from integer d1 -> int set.
+   * a map from integer d1 -&gt; int set.
    * 
-   * for fact d1, identityPaths[d1] gives the set of block numbers N s.t. for n \in N, <s_p, d1> -> <n, d1> is a path edge.
+   * for fact d1, identityPaths[d1] gives the set of block numbers N s.t. for n \in N, &lt;s_p, d1&gt; -&gt; &lt;n, d1&gt; is a path edge.
    */
-  private final SparseVector<IntSet> identityPaths = new SparseVector<IntSet>(1, 1.1f);
+  private final SparseVector<IntSet> identityPaths = new SparseVector<>(1, 1.1f);
 
   /**
-   * a map from integer d2 -> int set
+   * a map from integer d2 -&gt; int set
    * 
-   * for fact d2, zeroPaths[d2] gives the set of block numbers N s.t. for n \in N, <s_p, 0> -> <n, d2> is a path edge.
+   * for fact d2, zeroPaths[d2] gives the set of block numbers N s.t. for n \in N, &lt;s_p, 0&gt; -&gt; &lt;n, d2&gt; is a path edge.
    */
-  private final SparseVector<IntSet> zeroPaths = new SparseVector<IntSet>(1, 1.1f);
+  private final SparseVector<IntSet> zeroPaths = new SparseVector<>(1, 1.1f);
 
   /**
    * @param fastMerge if true, the representation uses extra space in order to support faster merge operations
    */
   public LocalPathEdges(boolean fastMerge) {
-    altPaths = fastMerge ? new SparseVector<IBinaryNaturalRelation>(1, 1.1f) : null;
+    altPaths = fastMerge ? new SparseVector<>(1, 1.1f) : null;
   }
 
   /**
@@ -99,6 +99,7 @@ public class LocalPathEdges {
    * 
    * @param j
    */
+  @SuppressWarnings("unused")
   public void addPathEdge(int i, int n, int j) {
 
     if (i == 0) {
@@ -137,6 +138,7 @@ public class LocalPathEdges {
    * 
    * @param n local block number of the basic block n
    */
+  @SuppressWarnings("unused")
   private void addIdentityPathEdge(int i, int n) {
     BitVectorIntSet s = (BitVectorIntSet) identityPaths.get(i);
     if (s == null) {
@@ -167,6 +169,7 @@ public class LocalPathEdges {
    * 
    * @param j
    */
+  @SuppressWarnings("unused")
   private void addZeroPathEdge(int n, int j) {
 
     BitVectorIntSet z = (BitVectorIntSet) zeroPaths.get(j);
@@ -190,8 +193,8 @@ public class LocalPathEdges {
   }
 
   /**
-   * N.B: If we're using the ZERO_PATH_SHORT_CIRCUIT, then we may have <s_p, d1> -> <n, d2> implicitly represented since we also
-   * have <s_p, 0> -> <n,d2>. However, getInverse() <b> will NOT </b> return these implicit d1 bits in the result. This translates
+   * N.B: If we're using the ZERO_PATH_SHORT_CIRCUIT, then we may have &lt;s_p, d1&gt; -&gt; &lt;n, d2&gt; implicitly represented since we also
+   * have &lt;s_p, 0&gt; -&gt; &lt;n,d2&gt;. However, getInverse() &lt;b&gt; will NOT &lt;/b&gt; return these implicit d1 bits in the result. This translates
    * to saying that the caller had better not care about any other d1 other than d1==0 if d1==0 is present. This happens to be true
    * in the single use of getInverse() in the tabulation solver, which uses getInverse() to propagate flow from an exit node back to
    * the caller's return site(s). Since we know that we will see flow from fact 0 to the return sites(s), we don't care about other
@@ -199,7 +202,7 @@ public class LocalPathEdges {
    * 
    * @param n local block number of a basic block n
    * @param d2
-   * @return the sparse int set of d1 s.t. <s_p, d1> -> <n, d2> are recorded as path edges. null if none found
+   * @return the sparse int set of d1 s.t. {@literal <s_p, d1> -> <n, d2>} are recorded as path edges. null if none found
    */
   public IntSet getInverse(int n, int d2) {
     IBinaryNaturalRelation R = paths.get(d2);
@@ -276,7 +279,7 @@ public class LocalPathEdges {
    * @param i
    * @param n local block number of a basic block n
    * @param j
-   * @return true iff we have a path edge <s_p,i>-><n, j>
+   * @return true iff we have a path edge {@literal <s_p,i> -> <n, j>}
    */
   public boolean contains(int i, int n, int j) {
 
@@ -311,7 +314,7 @@ public class LocalPathEdges {
   /**
    * 
    * @param n
-   * @return set of d2 s.t. d1->d2 is a path edge for node n.
+   * @return set of d2 s.t. d1 -&gt; d2 is a path edge for node n.
    */
   public IntSet getReachable(int n, int d1) {
     if (PARANOID) {
@@ -323,7 +326,7 @@ public class LocalPathEdges {
   /**
    * Note that this is really slow!!!
    * 
-   * @return set of d2 s.t. d1->d2 is a path edge for node n
+   * @return set of d2 s.t. d1 -&gt; d2 is a path edge for node n
    */
   private IntSet getReachableSlow(int n, int d1) {
     MutableSparseIntSet result = MutableSparseIntSet.makeEmpty();
@@ -331,10 +334,10 @@ public class LocalPathEdges {
       // this is convoluted on purpose for efficiency: to avoid random access to
       // the sparse vector, we do parallel iteration with the vector's indices
       // and contents. TODO: better data structure?
-      Iterator contents = paths.iterator();
+      Iterator<IBinaryNaturalRelation> contents = paths.iterator();
       for (IntIterator it = paths.iterateIndices(); it.hasNext();) {
         int d2 = it.next();
-        IBinaryNaturalRelation R = (IBinaryNaturalRelation) contents.next();
+        IBinaryNaturalRelation R = contents.next();
         if (R != null && R.contains(n, d1)) {
           result.add(d2);
         }
@@ -350,10 +353,10 @@ public class LocalPathEdges {
       // this is convoluted on purpose for efficiency: to avoid random access to
       // the sparse vector, we do parallel iteration with the vector's indices
       // and contents. TODO: better data structure?
-      Iterator contents = zeroPaths.iterator();
+      Iterator<IntSet> contents = zeroPaths.iterator();
       for (IntIterator it = zeroPaths.iterateIndices(); it.hasNext();) {
         int d2 = it.next();
-        BitVectorIntSet s = (BitVectorIntSet) contents.next();
+        IntSet s = contents.next();
         if (s != null && s.contains(n)) {
           result.add(d2);
         }
@@ -363,7 +366,7 @@ public class LocalPathEdges {
   }
 
   /**
-   * @return set of d2 s.t. d1->d2 is a path edge for node n
+   * @return set of d2 s.t. d1 -&gt; d2 is a path edge for node n
    */
   private IntSet getReachableFast(int n, int d1) {
 
@@ -378,7 +381,7 @@ public class LocalPathEdges {
    * TODO: optimize this based on altPaths
    * 
    * @param n the local block number of a node
-   * @return set of d2 s.t \exists d1 s.t. d1->d2 is a path edge for node n
+   * @return set of d2 s.t \exists d1 s.t. d1 -&gt; d2 is a path edge for node n
    */
   public IntSet getReachable(int n) {
     MutableSparseIntSet result = MutableSparseIntSet.makeEmpty();
@@ -386,10 +389,10 @@ public class LocalPathEdges {
       // this is convoluted on purpose for efficiency: to avoid random access to
       // the sparse vector, we do parallel iteration with the vector's indices
       // and contents. TODO: better data structure?
-      Iterator contents = paths.iterator();
+      Iterator<IBinaryNaturalRelation> contents = paths.iterator();
       for (IntIterator it = paths.iterateIndices(); it.hasNext();) {
         int d2 = it.next();
-        IBinaryNaturalRelation R = (IBinaryNaturalRelation) contents.next();
+        IBinaryNaturalRelation R = contents.next();
         if (R != null && R.anyRelated(n)) {
           result.add(d2);
         }
@@ -399,10 +402,10 @@ public class LocalPathEdges {
       // this is convoluted on purpose for efficiency: to avoid random access to
       // the sparse vector, we do parallel iteration with the vector's indices
       // and contents. TODO: better data structure?
-      Iterator contents = identityPaths.iterator();
+      Iterator<IntSet> contents = identityPaths.iterator();
       for (IntIterator it = identityPaths.iterateIndices(); it.hasNext();) {
         int d1 = it.next();
-        BitVectorIntSet s = (BitVectorIntSet) contents.next();
+        IntSet s = contents.next();
         if (s != null && s.contains(n)) {
           result.add(d1);
         }
@@ -412,10 +415,10 @@ public class LocalPathEdges {
       // this is convoluted on purpose for efficiency: to avoid random access to
       // the sparse vector, we do parallel iteration with the vector's indices
       // and contents. TODO: better data structure?
-      Iterator contents = zeroPaths.iterator();
+      Iterator<IntSet> contents = zeroPaths.iterator();
       for (IntIterator it = zeroPaths.iterateIndices(); it.hasNext();) {
         int d2 = it.next();
-        BitVectorIntSet s = (BitVectorIntSet) contents.next();
+        IntSet s = contents.next();
         if (s != null && s.contains(n)) {
           result.add(d2);
         }

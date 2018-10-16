@@ -48,6 +48,7 @@
  */
 package com.ibm.wala.util.graph.labeled;
 
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
@@ -64,7 +65,12 @@ import com.ibm.wala.util.intset.IntSet;
 
 /**
  */
-public class SparseNumberedLabeledEdgeManager<T, U> implements NumberedLabeledEdgeManager<T, U> {
+public class SparseNumberedLabeledEdgeManager<T, U> implements Serializable, NumberedLabeledEdgeManager<T, U> {
+
+  /**
+   * 
+   */
+  private static final long serialVersionUID = 5298089288917726790L;
 
   /**
    * the label to be attached to an edge when no label is specified
@@ -78,14 +84,14 @@ public class SparseNumberedLabeledEdgeManager<T, U> implements NumberedLabeledEd
    */
   private final Map<U, SparseNumberedEdgeManager<T>> edgeLabelToManager = HashMapFactory.make();
 
-  private final ArraySetMultiMap<T, U> nodeToPredLabels = new ArraySetMultiMap<T, U>();
+  private final ArraySetMultiMap<T, U> nodeToPredLabels = new ArraySetMultiMap<>();
 
-  private final ArraySetMultiMap<T, U> nodeToSuccLabels = new ArraySetMultiMap<T, U>();
+  private final ArraySetMultiMap<T, U> nodeToSuccLabels = new ArraySetMultiMap<>();
 
   private SparseNumberedEdgeManager<T> getManagerForLabel(U label) {
     SparseNumberedEdgeManager<T> ret = edgeLabelToManager.get(label);
     if (ret == null) {
-      ret = new SparseNumberedEdgeManager<T>(nodeManager);
+      ret = new SparseNumberedEdgeManager<>(nodeManager);
       edgeLabelToManager.put(label, ret);
     }
     return ret;
@@ -172,8 +178,7 @@ public class SparseNumberedLabeledEdgeManager<T, U> implements NumberedLabeledEd
    */
   @Override
   public void removeIncomingEdges(T node) throws IllegalArgumentException {
-    for (Iterator<U> inLabelIter = nodeToPredLabels.get(node).iterator(); inLabelIter.hasNext();) {
-      U label = inLabelIter.next();
+    for (U label : nodeToPredLabels.get(node)) {
       getManagerForLabel(label).removeIncomingEdges(node);
     }
 
@@ -184,8 +189,7 @@ public class SparseNumberedLabeledEdgeManager<T, U> implements NumberedLabeledEd
    */
   @Override
   public void removeOutgoingEdges(T node) throws IllegalArgumentException {
-    for (Iterator<U> outLabelIter = nodeToSuccLabels.get(node).iterator(); outLabelIter.hasNext();) {
-      U label = outLabelIter.next();
+    for (U label : nodeToSuccLabels.get(node)) {
       getManagerForLabel(label).removeOutgoingEdges(node);
     }
 

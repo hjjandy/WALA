@@ -10,14 +10,17 @@
  *******************************************************************************/
 package com.ibm.wala.ssa;
 
+import java.util.LinkedList;
+import java.util.List;
+
 import com.ibm.wala.util.collections.Pair;
 
 /**
  * A pi node policy with the following rule:
  * 
- * If we have the following code: <verbatim> S1: if (c op null) { ... } </verbatim>
+ * If we have the following code: <pre> S1: if (c op null) { ... } </pre>
  * 
- * replace it with: <verbatim> S1: if (c op null) { v2 = PI(c, S1) .... } </verbatim>
+ * replace it with: <pre> S1: if (c op null) { v2 = PI(c, S1) .... } </pre>
  * 
  * This renaming allows SSA-based analysis to reason about the nullness of v2 depending on the outcome of the branch.
  */
@@ -56,6 +59,14 @@ public class NullTestPiPolicy implements SSAPiNodePolicy {
   @Override
   public Pair<Integer, SSAInstruction> getPi(SSAAbstractInvokeInstruction call, SymbolTable symbolTable) {
     return null;
+  }
+
+  @Override
+  public List<Pair<Integer, SSAInstruction>> getPis(SSAConditionalBranchInstruction cond, SSAInstruction def1, SSAInstruction def2,
+      SymbolTable symbolTable) {
+    LinkedList<Pair<Integer, SSAInstruction>> result = new LinkedList<>();
+    result.add(getPi(cond, def1, def2, symbolTable));
+    return result;
   }
 
 }

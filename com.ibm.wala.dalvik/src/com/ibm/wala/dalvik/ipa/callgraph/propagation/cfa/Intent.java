@@ -40,8 +40,6 @@
  */
 package com.ibm.wala.dalvik.ipa.callgraph.propagation.cfa;
 
-import java.util.logging.Logger;
-
 import com.ibm.wala.dalvik.util.AndroidComponent;
 import com.ibm.wala.dalvik.util.AndroidEntryPointManager;
 import com.ibm.wala.ipa.callgraph.ContextItem;
@@ -70,7 +68,7 @@ import com.ibm.wala.util.strings.Atom;
  * @see     com.ibm.wala.dalvik.ipa.callgraph.propagation.cfa.IntentContextSelector
  * @see     com.ibm.wala.dalvik.ipa.callgraph.propagation.cfa.IntentContextInterpreter
  *
- * @author  Tobias Blaschke <code@tobiasblaschke.de>
+ * @author  Tobias Blaschke &lt;code@tobiasblaschke.de&gt;
  * @since   2013-10-12
  */
 public class Intent implements ContextItem, Comparable<Intent> {
@@ -92,7 +90,7 @@ public class Intent implements ContextItem, Comparable<Intent> {
         BROADCAST,          
         /** Do not handle intent */
         IGNORE
-    };
+    }
 
     private enum Explicit {
         UNSET,
@@ -140,8 +138,10 @@ public class Intent implements ContextItem, Comparable<Intent> {
                 explicit = Explicit.EXPLICIT;
                 break;
             case EXPLICIT:
-                
                 unbind();
+                break;
+            default:
+            	throw new UnsupportedOperationException(String.format("unexpected explicitness setting %s", explicit));
         }
     }
 
@@ -153,6 +153,7 @@ public class Intent implements ContextItem, Comparable<Intent> {
         this.immutable = true;
     }
 
+    @Override
     public Intent clone() {
         final Intent clone = new Intent();
         clone.action = this.action; // OK here?
@@ -252,7 +253,7 @@ public class Intent implements ContextItem, Comparable<Intent> {
      *  IntentStarters.StartInfo to determine the Target. However it is nicer to set the Component
      *  here.
      *
-     *  @todo   Set the Component somewhere
+     *  TODO: Set the Component somewhere
      */
     public AndroidComponent getComponent() {
         return this.targetCompontent;
@@ -260,7 +261,7 @@ public class Intent implements ContextItem, Comparable<Intent> {
 
     private static boolean isSystemService(Intent intent) {  
         assert (intent.action != null);
-        return (intent != null && intent.action != null && (intent.action.getVal(0) != 'L') && (intent.action.rIndex((byte) '/') < 0) && (intent.action.rIndex((byte) '.') < 0));
+        return (intent.action.getVal(0) != 'L') && (intent.action.rIndex((byte) '/') < 0) && (intent.action.rIndex((byte) '.') < 0);
     }
 
     /**
@@ -270,9 +271,10 @@ public class Intent implements ContextItem, Comparable<Intent> {
      *
      *  Recomputes if the Intent is internal.
      *  TODO: 
-     *  @todo   Implement it ;)
-     *  @todo   What to return if it does not, but Summary-Information is available?
-     *  @todo   We should read in the Manifest.xml rather than relying on the packet name!
+     *  @param intent 
+     *  TODO: Implement it ;)
+     *  TODO: What to return if it does not, but Summary-Information is available?
+     *  TODO: We should read in the Manifest.xml rather than relying on the packet name!
      */
     private static boolean isInternal(Intent intent) {  // XXX: This may loop forever!
         /*final Intent override = AndroidEntryPointManager.MANAGER.getIntent(intent);
@@ -316,8 +318,6 @@ public class Intent implements ContextItem, Comparable<Intent> {
 
     /**
      *  Fallback: tries to determine on the Intent itself if it's a standard action.
-     *
-     *  Use {@link #isStandardAction(boolean)} instead.
      */
     private static boolean isStandardAction(Intent intent) {    //TODO: This may loop forever!
         /*final Intent override = AndroidEntryPointManager.MANAGER.getIntent(intent);

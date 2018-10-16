@@ -15,6 +15,7 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
 
+import com.ibm.wala.analysis.typeInference.TypeAbstraction;
 import com.ibm.wala.cfg.ControlFlowGraph;
 import com.ibm.wala.cfg.InducedCFG;
 import com.ibm.wala.classLoader.CallSiteReference;
@@ -22,11 +23,14 @@ import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.Context;
+import com.ibm.wala.ipa.callgraph.ContextKey;
 import com.ibm.wala.ipa.callgraph.propagation.SSAContextInterpreter;
 import com.ibm.wala.ipa.summaries.SyntheticIR;
 import com.ibm.wala.ssa.ConstantValue;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.IR;
+import com.ibm.wala.ssa.IRView;
 import com.ibm.wala.ssa.ISSABasicBlock;
 import com.ibm.wala.ssa.SSAArrayStoreInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
@@ -105,7 +109,7 @@ public class JavaLangClassContextInterpreter implements SSAContextInterpreter {
     }
 /** BEGIN Custom change: caching */
     
-    final JavaTypeContext context = (JavaTypeContext) node.getContext();
+    final Context context = node.getContext();
     final IMethod method = node.getMethod();
     final String hashKey = method.toString() + "@" + context.toString();
     
@@ -122,7 +126,12 @@ public class JavaLangClassContextInterpreter implements SSAContextInterpreter {
     return result;
   }
 
-  private IR makeIR(IMethod method, JavaTypeContext context) {
+  @Override
+  public IRView getIRView(CGNode node) {
+    return getIR(node);
+  }
+
+  private static IR makeIR(IMethod method, Context context) {
     Map<Integer, ConstantValue> constants = HashMapFactory.make();
     if (method.getReference().equals(GET_CONSTRUCTOR)) {
       SSAInstruction instrs[] = makeGetCtorStatements(context, constants);
@@ -186,7 +195,7 @@ public class JavaLangClassContextInterpreter implements SSAContextInterpreter {
     if (node == null) {
       throw new IllegalArgumentException("node is null");
     }
-    if (!(node.getContext() instanceof JavaTypeContext)) {
+    if (!(node.getContext().isA(JavaTypeContext.class))) {
       return false;
     }
     MethodReference mRef = node.getMethod().getReference();
@@ -201,10 +210,10 @@ public class JavaLangClassContextInterpreter implements SSAContextInterpreter {
       throw new IllegalArgumentException("node is null");
     }
     assert understands(node);
-    JavaTypeContext context = (JavaTypeContext) node.getContext();
-    TypeReference tr = context.getType().getTypeReference();
+    Context context = node.getContext();
+    TypeReference tr = ((TypeAbstraction)context.get(ContextKey.RECEIVER)).getTypeReference();
     if (tr != null) {
-      return new NonNullSingletonIterator<NewSiteReference>(NewSiteReference.make(0, tr));
+      return new NonNullSingletonIterator<>(NewSiteReference.make(0, tr));
     }
     return EmptyIterator.instance();
   }
@@ -218,7 +227,7 @@ public class JavaLangClassContextInterpreter implements SSAContextInterpreter {
   /**
    * Get all non-constructor, non-class-initializer methods declared by a class
    */
-  private Collection<IMethod> getDeclaredNormalMethods(IClass cls) {
+  private static Collection<IMethod> getDeclaredNormalMethods(IClass cls) {
     Collection<IMethod> result = HashSetFactory.make();
     for (IMethod m : cls.getDeclaredMethods()) {
       if (!m.isInit() && !m.isClinit()) {
@@ -231,9 +240,9 @@ public class JavaLangClassContextInterpreter implements SSAContextInterpreter {
   /**
    * Get all non-constructor, non-class-initializer methods declared by a class and all its superclasses
    */
-  private Collection<IMethod> getAllNormalPublicMethods(IClass cls) {
+  private static Collection<IMethod> getAllNormalPublicMethods(IClass cls) {
     Collection<IMethod> result = HashSetFactory.make();
-    Collection<IMethod> allMethods = null;
+    Collection<? extends IMethod> allMethods = null;
     allMethods = cls.getAllMethods();
     for (IMethod m : allMethods) {
       if (!m.isInit() && !m.isClinit() && m.isPublic()) {
@@ -246,7 +255,7 @@ public class JavaLangClassContextInterpreter implements SSAContextInterpreter {
   /**
    * Get all the constructors of a class
    */
-  private Collection<IMethod> getConstructors(IClass cls) {
+  private static Collection<IMethod> getConstructors(IClass cls) {
     Collection<IMethod> result = HashSetFactory.make();
     for (IMethod m : cls.getDeclaredMethods()) {
       if (m.isInit()) {
@@ -259,7 +268,7 @@ public class JavaLangClassContextInterpreter implements SSAContextInterpreter {
   /**
    * Get all the public constructors of a class
    */
-  private Collection<IMethod> getPublicConstructors(IClass cls) {
+  private static Collection<IMethod> getPublicConstructors(IClass cls) {
     Collection<IMethod> result = HashSetFactory.make();
     for (IMethod m : cls.getDeclaredMethods()) {
       if (m.isInit() && m.isPublic()) {
@@ -274,13 +283,13 @@ public class JavaLangClassContextInterpreter implements SSAContextInterpreter {
    * 
    * @param returnValues the possible return values for this method.
    */
-  private SSAInstruction[] getMethodArrayStatements(MethodReference ref, Collection<IMethod> returnValues, JavaTypeContext context,
+  private static SSAInstruction[] getMethodArrayStatements(MethodReference ref, Collection<IMethod> returnValues, Context context,
       Map<Integer, ConstantValue> constants) {
-    ArrayList<SSAInstruction> statements = new ArrayList<SSAInstruction>();
+    ArrayList<SSAInstruction> statements = new ArrayList<>();
     int nextLocal = ref.getNumberOfParameters() + 2;
     int retValue = nextLocal++;
-    IClass cls = context.getType().getType();
-    SSAInstructionFactory insts = context.getType().getType().getClassLoader().getInstructionFactory();
+    IClass cls = ((TypeAbstraction)context.get(ContextKey.RECEIVER)).getType();
+    SSAInstructionFactory insts = ((TypeAbstraction)context.get(ContextKey.RECEIVER)).getType().getClassLoader().getInstructionFactory();
     if (cls != null) {
       TypeReference arrType = ref.getReturnType();
       NewSiteReference site = new NewSiteReference(retValue, arrType);
@@ -321,12 +330,12 @@ public class JavaLangClassContextInterpreter implements SSAContextInterpreter {
    * 
    * @param returnValues the possible return values for this method.
    */
-  private SSAInstruction[] getParticularMethodStatements(MethodReference ref, Collection<IMethod> returnValues,
-      JavaTypeContext context, Map<Integer, ConstantValue> constants) {
-    ArrayList<SSAInstruction> statements = new ArrayList<SSAInstruction>();
+  private static SSAInstruction[] getParticularMethodStatements(MethodReference ref, Collection<IMethod> returnValues,
+      Context context, Map<Integer, ConstantValue> constants) {
+    ArrayList<SSAInstruction> statements = new ArrayList<>();
     int nextLocal = ref.getNumberOfParameters() + 2;
-    IClass cls = context.getType().getType();
-    SSAInstructionFactory insts = context.getType().getType().getClassLoader().getInstructionFactory();
+    IClass cls = ((TypeAbstraction)context.get(ContextKey.RECEIVER)).getType();
+    SSAInstructionFactory insts = ((TypeAbstraction)context.get(ContextKey.RECEIVER)).getType().getClassLoader().getInstructionFactory();
     if (cls != null) {
       for (IMethod m : returnValues) {
         int c = nextLocal++;
@@ -350,8 +359,8 @@ public class JavaLangClassContextInterpreter implements SSAContextInterpreter {
   /**
    * create statements for getConstructor()
    */
-  private SSAInstruction[] makeGetCtorStatements(JavaTypeContext context, Map<Integer, ConstantValue> constants) {
-    IClass cls = context.getType().getType();
+  private static SSAInstruction[] makeGetCtorStatements(Context context, Map<Integer, ConstantValue> constants) {
+    IClass cls = ((TypeAbstraction)context.get(ContextKey.RECEIVER)).getType();
     if (cls == null) {
       return getParticularMethodStatements(GET_CONSTRUCTOR, null, context, constants);
     } else {
@@ -360,8 +369,8 @@ public class JavaLangClassContextInterpreter implements SSAContextInterpreter {
   }
 
   // TODO
-  private SSAInstruction[] makeGetCtorsStatements(JavaTypeContext context, Map<Integer, ConstantValue> constants) {
-    IClass cls = context.getType().getType();
+  private static SSAInstruction[] makeGetCtorsStatements(Context context, Map<Integer, ConstantValue> constants) {
+    IClass cls = ((TypeAbstraction)context.get(ContextKey.RECEIVER)).getType();
     if (cls == null) {
       return getMethodArrayStatements(GET_DECLARED_CONSTRUCTORS, null, context, constants);
     } else {
@@ -369,8 +378,8 @@ public class JavaLangClassContextInterpreter implements SSAContextInterpreter {
     }
   }
 
-  private SSAInstruction[] makeGetMethodStatements(JavaTypeContext context, Map<Integer, ConstantValue> constants) {
-    IClass cls = context.getType().getType();
+  private static SSAInstruction[] makeGetMethodStatements(Context context, Map<Integer, ConstantValue> constants) {
+    IClass cls = ((TypeAbstraction)context.get(ContextKey.RECEIVER)).getType();
     if (cls == null) {
       return getParticularMethodStatements(GET_METHOD, null, context, constants);
     } else {
@@ -378,8 +387,8 @@ public class JavaLangClassContextInterpreter implements SSAContextInterpreter {
     }
   }
 
-  private SSAInstruction[] makeGetMethodsStatments(JavaTypeContext context, Map<Integer, ConstantValue> constants) {
-    IClass cls = context.getType().getType();
+  private static SSAInstruction[] makeGetMethodsStatments(Context context, Map<Integer, ConstantValue> constants) {
+    IClass cls = ((TypeAbstraction)context.get(ContextKey.RECEIVER)).getType();
     if (cls == null) {
       return getMethodArrayStatements(GET_METHODS, null, context, constants);
     } else {
@@ -390,8 +399,8 @@ public class JavaLangClassContextInterpreter implements SSAContextInterpreter {
   /**
    * create statements for getConstructor()
    */
-  private SSAInstruction[] makeGetDeclCtorStatements(JavaTypeContext context, Map<Integer, ConstantValue> constants) {
-    IClass cls = context.getType().getType();
+  private static SSAInstruction[] makeGetDeclCtorStatements(Context context, Map<Integer, ConstantValue> constants) {
+    IClass cls = ((TypeAbstraction)context.get(ContextKey.RECEIVER)).getType();
     if (cls == null) {
       return getParticularMethodStatements(GET_DECLARED_CONSTRUCTOR, null, context, constants);
     } else {
@@ -399,8 +408,8 @@ public class JavaLangClassContextInterpreter implements SSAContextInterpreter {
     }
   }
 
-  private SSAInstruction[] makeGetDeclCtorsStatements(JavaTypeContext context, Map<Integer, ConstantValue> constants) {
-    IClass cls = context.getType().getType();
+  private static SSAInstruction[] makeGetDeclCtorsStatements(Context context, Map<Integer, ConstantValue> constants) {
+    IClass cls = ((TypeAbstraction)context.get(ContextKey.RECEIVER)).getType();
     if (cls == null) {
       return getMethodArrayStatements(GET_DECLARED_CONSTRUCTORS, null, context, constants);
     } else {
@@ -411,8 +420,8 @@ public class JavaLangClassContextInterpreter implements SSAContextInterpreter {
   /**
    * create statements for getDeclaredMethod()
    */
-  private SSAInstruction[] makeGetDeclaredMethodStatements(JavaTypeContext context, Map<Integer, ConstantValue> constants) {
-    IClass cls = context.getType().getType();
+  private static SSAInstruction[] makeGetDeclaredMethodStatements(Context context, Map<Integer, ConstantValue> constants) {
+    IClass cls = ((TypeAbstraction)context.get(ContextKey.RECEIVER)).getType();
     if (cls == null) {
       return getParticularMethodStatements(GET_DECLARED_METHOD, null, context, constants);
     } else {
@@ -423,8 +432,8 @@ public class JavaLangClassContextInterpreter implements SSAContextInterpreter {
   /**
    * create statements for getDeclaredMethod()
    */
-  private SSAInstruction[] makeGetDeclaredMethodsStatements(JavaTypeContext context, Map<Integer, ConstantValue> constants) {
-    IClass cls = context.getType().getType();
+  private static SSAInstruction[] makeGetDeclaredMethodsStatements(Context context, Map<Integer, ConstantValue> constants) {
+    IClass cls = ((TypeAbstraction)context.get(ContextKey.RECEIVER)).getType();
     if (cls == null) {
       return getMethodArrayStatements(GET_DECLARED_METHODS, null, context, constants);
     } else {

@@ -38,7 +38,7 @@ public class ReachabilityFunctions<T> implements IFlowFunctionMap<T> {
   };
 
   public static <T> ReachabilityFunctions<T> createReachabilityFunctions() {
-    return new ReachabilityFunctions<T>();
+    return new ReachabilityFunctions<>();
   }
 
   private ReachabilityFunctions() {
@@ -68,6 +68,7 @@ public class ReachabilityFunctions<T> implements IFlowFunctionMap<T> {
     return FLOW_REACHES;
   }
   
+  @SuppressWarnings("unused")
   public IFlowFunction getReturnFlowFunction(T src, T dest) {
     return FLOW_REACHES;
   }

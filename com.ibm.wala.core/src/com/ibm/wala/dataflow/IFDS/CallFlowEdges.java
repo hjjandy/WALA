@@ -25,34 +25,35 @@ import com.ibm.wala.util.intset.SparseIntSet;
 public class CallFlowEdges {
 
   /**
-   * A map from integer -> (IBinaryNonNegativeIntRelation)
+   * A map from integer -&gt; (IBinaryNonNegativeIntRelation)
    * 
-   * For a fact d2, edges[d2] gives a relation R=(c,d1) s.t. (<c, d1> -> <s_p,d2>) was recorded as a call flow edge.
+   * For a fact d2, edges[d2] gives a relation R=(c,d1) s.t. (&lt;c, d1&gt; -&gt; &lt;s_p,d2&gt;) was recorded as a call flow edge.
    * 
-   * Note that we handle paths of the form <c, d1> -> <s_p,d1> specially, below.
+   * Note that we handle paths of the form &lt;c, d1&gt; -&gt; &lt;s_p,d1&gt; specially, below.
    * 
    * TODO: more representation optimization. A special representation for triples? sparse representations for CFG? exploit shorts
    * for ints?
    */
-  private final SparseVector<IBinaryNaturalRelation> edges = new SparseVector<IBinaryNaturalRelation>(1, 1.1f);
+  private final SparseVector<IBinaryNaturalRelation> edges = new SparseVector<>(1, 1.1f);
 
   /**
-   * a map from integer d1 -> int set.
+   * a map from integer d1 -&gt; int set.
    * 
-   * for fact d1, identityPaths[d1] gives the set of block numbers C s.t. for c \in C, <c, d1> -> <s_p, d1> is an edge.
+   * for fact d1, identityPaths[d1] gives the set of block numbers C s.t. for c \in C, &lt;c, d1&gt; -&gt; &lt;s_p, d1&gt; is an edge.
    */
-  private final SparseVector<IntSet> identityEdges = new SparseVector<IntSet>(1, 1.1f);
+  private final SparseVector<IntSet> identityEdges = new SparseVector<>(1, 1.1f);
 
   public CallFlowEdges() {
   }
 
   /**
-   * Record that we've discovered a call edge <c,d1> -> <s_p, d2>
+   * Record that we've discovered a call edge &lt;c,d1&gt; -&gt; &lt;s_p, d2&gt;
    * 
    * @param c global number identifying the call site node
    * @param d1 source fact at the call edge
    * @param d2 result fact (result of the call flow function)
    */
+  @SuppressWarnings("unused")
   public void addCallEdge(int c, int d1, int d2) {
     if (TabulationSolver.DEBUG_LEVEL > 0) {
       System.err.println("addCallEdge " + c + " " + d1 + " " + d2);
@@ -78,8 +79,9 @@ public class CallFlowEdges {
   /**
    * @param c
    * @param d2
-   * @return set of d1 s.t. <c, d1> -> <s_p, d2> was recorded as call flow, or null if none found.
+   * @return set of d1 s.t. {@literal <c, d1> -> <s_p, d2>} was recorded as call flow, or null if none found.
    */
+  @SuppressWarnings("unused")
   public IntSet getCallFlowSources(int c, int d2) {
     if (c < 0) {
       throw new IllegalArgumentException("invalid c : " + c);
@@ -119,8 +121,9 @@ public class CallFlowEdges {
   /**
    * 
    * @param d2
-   * @return set of c s.t. <c, d1> -> <s_p, d2> was recorded as call flow (for some d1), or null if none found.
+   * @return set of c s.t. {@literal <c, d1> -> <s_p, d2>} was recorded as call flow (for some d1), or null if none found.
    */
+  @SuppressWarnings("unused")
   public IntSet getCallFlowSourceNodes(int d2) {
     IntSet s = identityEdges.get(d2);
     IBinaryNaturalRelation R = edges.get(d2);
@@ -145,7 +148,7 @@ public class CallFlowEdges {
   }
 
   // TODO optimize
-  private IntSet getDomain(IBinaryNaturalRelation r) {
+  private static IntSet getDomain(IBinaryNaturalRelation r) {
     MutableIntSet result = MutableSparseIntSet.makeEmpty();
     int maxKeyValue = r.maxKeyValue();
     for (int i = 0; i <= maxKeyValue; i++) {

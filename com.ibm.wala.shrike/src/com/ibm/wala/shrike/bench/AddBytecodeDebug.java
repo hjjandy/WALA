@@ -42,18 +42,18 @@ public class AddBytecodeDebug {
 
   public static void main(String[] args) throws Exception {
     for (int i = 0; i < 1; i++) {
-      instrumenter = new OfflineInstrumenter(true);
+      instrumenter = new OfflineInstrumenter();
 
-      Writer w = new BufferedWriter(new FileWriter("report", false));
-
-      args = instrumenter.parseStandardArgs(args);
-      instrumenter.setPassUnmodifiedClasses(true);
-      instrumenter.beginTraversal();
-      ClassInstrumenter ci;
-      while ((ci = instrumenter.nextClass()) != null) {
-        doClass(ci, w);
+      try (final Writer w = new BufferedWriter(new FileWriter("report", false))) {
+        args = instrumenter.parseStandardArgs(args);
+        instrumenter.setPassUnmodifiedClasses(true);
+        instrumenter.beginTraversal();
+        ClassInstrumenter ci;
+        while ((ci = instrumenter.nextClass()) != null) {
+          doClass(ci, w);
+        }
+        instrumenter.close();
       }
-      instrumenter.close();
     }
   }
 
@@ -73,9 +73,9 @@ public class AddBytecodeDebug {
         me.beginPass();
         ExceptionHandler[][] handlers = me.getHandlers();
         boolean[] putDumperAt = new boolean[handlers.length];
-        for (int i = 0; i < handlers.length; i++) {
-          for (int j = 0; j < handlers[i].length; j++) {
-            int offset = handlers[i][j].getHandler();
+        for (ExceptionHandler[] handler : handlers) {
+          for (ExceptionHandler element : handler) {
+            int offset = element.getHandler();
             if (!putDumperAt[offset]) {
               putDumperAt[offset] = true;
               me.insertBefore(offset, new MethodEditor.Patch() {

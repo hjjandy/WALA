@@ -13,7 +13,6 @@ package com.ibm.wala.shrikeBT.analysis;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.BitSet;
 import java.util.List;
 
@@ -157,12 +156,12 @@ public class Analyzer {
     for (int i = 0; i < instructions.length; i++) {
       IInstruction instr = instructions[i];
       int[] targets = instr.getBranchTargets();
-      for (int j = 0; j < targets.length; j++) {
-        addBackEdge(targets[j], i);
+      for (int target : targets) {
+        addBackEdge(target, i);
       }
       ExceptionHandler[] hs = handlers[i];
-      for (int j = 0; j < hs.length; j++) {
-        addBackEdge(hs[j].getHandler(), i);
+      for (ExceptionHandler element : hs) {
+        addBackEdge(element.getHandler(), i);
       }
     }
 
@@ -198,7 +197,7 @@ public class Analyzer {
     return ClassHierarchy.isSubtypeOf(hierarchy, patchType(t1), patchType(t2)) != ClassHierarchy.NO;
   }
 
-  private boolean isPrimitive(String type) {
+  private static boolean isPrimitive(String type) {
     return type != null && (!type.startsWith("L") && !type.startsWith("["));
   }
   
@@ -236,18 +235,17 @@ public class Analyzer {
     BitSet r = new BitSet(instructions.length);
 
     r.set(0);
-    for (int i = 0; i < instructions.length; i++) {
-      int[] targets = instructions[i].getBranchTargets();
+    for (IInstruction instruction : instructions) {
+      int[] targets = instruction.getBranchTargets();
 
-      for (int j = 0; j < targets.length; j++) {
-        r.set(targets[j]);
+      for (int target : targets) {
+        r.set(target);
       }
     }
-    for (int i = 0; i < handlers.length; i++) {
-      ExceptionHandler[] hs = handlers[i];
+    for (ExceptionHandler[] hs : handlers) {
       if (hs != null) {
-        for (int j = 0; j < hs.length; j++) {
-          r.set(hs[j].getHandler());
+        for (ExceptionHandler element : hs) {
+          r.set(element.getHandler());
         }
       }
     }
@@ -276,14 +274,14 @@ public class Analyzer {
 
       IInstruction instr = instructions[from];
       int[] targets = instr.getBranchTargets();
-      for (int i = 0; i < targets.length; i++) {
-        getReachableRecursive(targets[i], reachable, followHandlers, mask);
+      for (int target : targets) {
+        getReachableRecursive(target, reachable, followHandlers, mask);
       }
 
       if (followHandlers) {
         ExceptionHandler[] hs = handlers[from];
-        for (int i = 0; i < hs.length; i++) {
-          getReachableRecursive(hs[i].getHandler(), reachable, followHandlers, mask);
+        for (ExceptionHandler element : hs) {
+          getReachableRecursive(element.getHandler(), reachable, followHandlers, mask);
         }
       }
 
@@ -325,8 +323,8 @@ public class Analyzer {
       reaching.set(to);
 
       int[] targets = backEdges[to];
-      for (int i = 0; i < targets.length; i++) {
-        getReachingRecursive(targets[i], reaching, mask);
+      for (int target : targets) {
+        getReachingRecursive(target, reaching, mask);
       }
 
       if (to > 0 && instructions[to - 1].isFallThrough()) {
@@ -340,8 +338,8 @@ public class Analyzer {
 
   private void getReachingBase(int to, BitSet reaching, BitSet mask) {
     int[] targets = backEdges[to];
-    for (int i = 0; i < targets.length; i++) {
-      getReachingRecursive(targets[i], reaching, mask);
+    for (int target : targets) {
+      getReachingRecursive(target, reaching, mask);
     }
 
     if (to > 0 && instructions[to - 1].isFallThrough()) {
@@ -391,12 +389,12 @@ public class Analyzer {
       }
 
       int[] targets = instr.getBranchTargets();
-      for (int j = 0; j < targets.length; j++) {
-        computeStackSizesAt(stackSizes, targets[j], size);
+      for (int target : targets) {
+        computeStackSizesAt(stackSizes, target, size);
       }
       ExceptionHandler[] hs = handlers[i];
-      for (int j = 0; j < hs.length; j++) {
-        computeStackSizesAt(stackSizes, hs[j].getHandler(), 1);
+      for (ExceptionHandler element : hs) {
+        computeStackSizesAt(stackSizes, element.getHandler(), 1);
       }
 
       if (!instr.isFallThrough()) {
@@ -516,7 +514,7 @@ public class Analyzer {
     }
   }
 
-  private String[] cutArray(String[] a, int len) {
+  private static String[] cutArray(String[] a, int len) {
     if (len == 0) {
       return noStrings;
     } else {
@@ -529,11 +527,11 @@ public class Analyzer {
   private boolean mergeTypes(int i, String[] curStack, int curStackSize, String[] curLocals, int curLocalsSize,
       List<PathElement> path) throws FailureException {
     boolean a = mergeStackTypes(i, curStack, curStackSize, path);
-    boolean b = mergeLocalTypes(i, curLocals, curLocalsSize, path);
+    boolean b = mergeLocalTypes(i, curLocals, curLocalsSize);
     return a||b;
   }
   
-  private boolean longType(String type) {
+  private static boolean longType(String type) {
     return Constants.TYPE_long.equals(type) || Constants.TYPE_double.equals(type);
   }
   
@@ -563,7 +561,7 @@ public class Analyzer {
     return changed;
   }
 
-  private boolean mergeLocalTypes(int i, String[] curLocals, int curLocalsSize, List<PathElement> path) throws FailureException {
+  private boolean mergeLocalTypes(int i, String[] curLocals, int curLocalsSize) {
     boolean changed = false;
 
     if (locals[i] == null) {
@@ -720,9 +718,9 @@ public class Analyzer {
         }
 
         ExceptionHandler[] handler = handlers[i];
-        for(int h = 0; h < handler.length; h++) {
-          int target = handler[h].getHandler();
-          String cls = handler[h].getCatchClass();
+        for (ExceptionHandler element : handler) {
+          int target = element.getHandler();
+          String cls = element.getCatchClass();
           if (cls == null) {
             cls = "Ljava/lang/Throwable;";
           }
@@ -733,12 +731,9 @@ public class Analyzer {
         }
         
         int[] targets = instr.getBranchTargets();
-        for (int j = 0; j < targets.length; j++) {
-          if (targets[j] == 29 && classType.contains("MetaClassImpl;") && signature.contains("(Ljava/lang/String;Lorg/codehaus/groovy/reflection/CachedClass;)")) {
-              System.err.println("got here");
-          }
-          if (mergeTypes(targets[j], curStack, curStackSize, curLocals, curLocalsSize[0], path)) {
-            computeTypes(targets[j], visitor, makeTypesAt, path);
+        for (int target : targets) {
+          if (mergeTypes(target, curStack, curStackSize, curLocals, curLocalsSize[0], path)) {
+            computeTypes(target, visitor, makeTypesAt, path);
           }
         }
 
@@ -784,8 +779,7 @@ public class Analyzer {
 
   private void computeMaxLocals() {
     maxLocals = locals[0].length;
-    for (int i = 0; i < instructions.length; i++) {
-      IInstruction instr = instructions[i];
+    for (IInstruction instr : instructions) {
       if (instr instanceof LoadInstruction) {
         maxLocals = Math.max(maxLocals, ((LoadInstruction) instr).getVarIndex() + 1);
       } else if (instr instanceof StoreInstruction) {
@@ -816,8 +810,8 @@ public class Analyzer {
     }
     int[] stackSizes = getStackSizes();
     maxStack = 0;
-    for (int i = 0; i < stackSizes.length; i++) {
-      maxStack = Math.max(maxStack, stackSizes[i]);
+    for (int stackSize : stackSizes) {
+      maxStack = Math.max(maxStack, stackSize);
     }
     computeMaxLocals();
   }

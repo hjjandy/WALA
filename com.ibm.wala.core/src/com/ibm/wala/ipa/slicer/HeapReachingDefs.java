@@ -14,6 +14,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import com.ibm.wala.dataflow.graph.AbstractMeetOperator;
 import com.ibm.wala.dataflow.graph.BitVectorFramework;
@@ -32,7 +33,6 @@ import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.StaticFieldKey;
-import com.ibm.wala.ipa.modref.DelegatingExtendedHeapModel;
 import com.ibm.wala.ipa.modref.ExtendedHeapModel;
 import com.ibm.wala.ipa.modref.ModRef;
 import com.ibm.wala.ipa.slicer.HeapStatement.HeapReturnCaller;
@@ -45,7 +45,6 @@ import com.ibm.wala.ssa.analysis.ExplodedControlFlowGraph;
 import com.ibm.wala.ssa.analysis.IExplodedBasicBlock;
 import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.CancelRuntimeException;
-import com.ibm.wala.util.Predicate;
 import com.ibm.wala.util.collections.FilterIterator;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.Iterator2Collection;
@@ -72,11 +71,11 @@ public class HeapReachingDefs<T extends InstanceKey> {
 
   private static final boolean VERBOSE = false;
 
-  private final ModRef modRef;
+  private final ModRef<T> modRef;
 
   private final ExtendedHeapModel heapModel;
   
-  public HeapReachingDefs(ModRef modRef, ExtendedHeapModel heapModel) {
+  public HeapReachingDefs(ModRef<T> modRef, ExtendedHeapModel heapModel) {
     this.modRef = modRef;
     this.heapModel = heapModel;
   }
@@ -125,12 +124,12 @@ public class HeapReachingDefs<T extends InstanceKey> {
     Map<Integer, NormalStatement> ssaInstructionIndex2Statement = mapInstructionsToStatements(domain);
 
     // solve reaching definitions as a dataflow problem
-    BitVectorFramework<IExplodedBasicBlock, Statement> rd = new BitVectorFramework<IExplodedBasicBlock, Statement>(cfg, new RD(node,
+    BitVectorFramework<IExplodedBasicBlock, Statement> rd = new BitVectorFramework<>(cfg, new RD(node,
         cfg, pa, domain, ssaInstructionIndex2Statement, exclusions), domain);
     if (VERBOSE) {
       System.err.println("Solve ");
     }
-    BitVectorSolver<? extends ISSABasicBlock> solver = new BitVectorSolver<IExplodedBasicBlock>(rd);
+    BitVectorSolver<? extends ISSABasicBlock> solver = new BitVectorSolver<>(rd);
     try {
       solver.solve(null);
     } catch (CancelException e) {
@@ -181,7 +180,7 @@ public class HeapReachingDefs<T extends InstanceKey> {
      * For each pointerKey, which statements may def it
      */
     private Map<PointerKey, MutableIntSet> initPointerKeyMod(OrdinalSetMapping<Statement> domain, CGNode node, ExtendedHeapModel h,
-        PointerAnalysis<? extends InstanceKey> pa) {
+        PointerAnalysis<T> pa) {
       Map<PointerKey, MutableIntSet> pointerKeyMod = HashMapFactory.make();
       for (Statement s : domain) {
         switch (s.getKind()) {
@@ -323,7 +322,7 @@ public class HeapReachingDefs<T extends InstanceKey> {
               }
             }
           }
-          return new OrdinalSet<Statement>(defs, domain);
+          return new OrdinalSet<>(defs, domain);
         } else {
           return OrdinalSet.empty();
         }
@@ -337,7 +336,7 @@ public class HeapReachingDefs<T extends InstanceKey> {
         if (pointerKeyMod.get(p) == null) {
           return OrdinalSet.empty();
         }
-        return new OrdinalSet<Statement>(pointerKeyMod.get(p).intersection(v.getValue()), domain);
+        return new OrdinalSet<>(pointerKeyMod.get(p).intersection(v.getValue()), domain);
       }
       case HEAP_RET_CALLER: {
         HeapStatement.HeapReturnCaller r = (HeapStatement.HeapReturnCaller) s;
@@ -349,7 +348,7 @@ public class HeapReachingDefs<T extends InstanceKey> {
         } else {
           // the defs that flow to the call may flow to this return, since
           // the callees may have no relevant effect.
-          return new OrdinalSet<Statement>(pointerKeyMod.get(r.getLocation()).intersection(v.getValue()), domain);
+          return new OrdinalSet<>(pointerKeyMod.get(r.getLocation()).intersection(v.getValue()), domain);
         }
       }
       case HEAP_PARAM_CALLER: {
@@ -360,14 +359,14 @@ public class HeapReachingDefs<T extends InstanceKey> {
           int x = domain.getMappedIndex(new HeapStatement.HeapParamCallee(node, r.getLocation()));
           assert x >= 0;
           IntSet xset = SparseIntSet.singleton(x);
-          return new OrdinalSet<Statement>(xset, domain);
+          return new OrdinalSet<>(xset, domain);
         }
         BitVectorVariable v = solver.getIn(callBlock);
         if (pointerKeyMod.get(r.getLocation()) == null || v.getValue() == null) {
           // do nothing ... force flow into and out of the callees
           return OrdinalSet.empty();
         } else {
-          return new OrdinalSet<Statement>(pointerKeyMod.get(r.getLocation()).intersection(v.getValue()), domain);
+          return new OrdinalSet<>(pointerKeyMod.get(r.getLocation()).intersection(v.getValue()), domain);
         }
       }
       case NORMAL_RET_CALLEE:
@@ -420,7 +419,7 @@ public class HeapReachingDefs<T extends InstanceKey> {
     return true;
   }
 
-  private Collection<PointerKey> getMod(Statement s, CGNode n, ExtendedHeapModel h, PointerAnalysis<? extends InstanceKey> pa, HeapExclusions exclusions) {
+  private Collection<PointerKey> getMod(Statement s, CGNode n, ExtendedHeapModel h, PointerAnalysis<T> pa, HeapExclusions exclusions) {
     switch (s.getKind()) {
     case NORMAL:
       NormalStatement ns = (NormalStatement) s;
@@ -466,7 +465,7 @@ public class HeapReachingDefs<T extends InstanceKey> {
 
   private static OrdinalSetMapping<Statement> createStatementDomain(Collection<Statement> statements) {
     Statement[] arr = new Statement[statements.size()];
-    OrdinalSetMapping<Statement> domain = new ObjectArrayMapping<Statement>(statements.toArray(arr));
+    OrdinalSetMapping<Statement> domain = new ObjectArrayMapping<>(statements.toArray(arr));
     return domain;
   }
 
@@ -481,7 +480,7 @@ public class HeapReachingDefs<T extends InstanceKey> {
 
     private final OrdinalSetMapping<Statement> domain;
 
-    private final PointerAnalysis<? extends InstanceKey> pa;
+    private final PointerAnalysis<T> pa;
 
     private final Map<Integer, NormalStatement> ssaInstructionIndex2Statement;
 
@@ -493,7 +492,7 @@ public class HeapReachingDefs<T extends InstanceKey> {
      */
     private final IBinaryNaturalRelation heapReturnCaller = new BasicNaturalRelation();
 
-    public RD(CGNode node, ExplodedControlFlowGraph cfg, PointerAnalysis<? extends InstanceKey> pa2, OrdinalSetMapping<Statement> domain,
+    public RD(CGNode node, ExplodedControlFlowGraph cfg, PointerAnalysis<T> pa2, OrdinalSetMapping<Statement> domain,
         Map<Integer, NormalStatement> ssaInstructionIndex2Statement, HeapExclusions exclusions) {
       this.node = node;
       this.cfg = cfg;
@@ -645,31 +644,23 @@ public class HeapReachingDefs<T extends InstanceKey> {
           return null;
         } else {
           // only static fields are actually killed
-          Predicate staticFilter = new Predicate() {
-            @Override public boolean test(Object o) {
-              return o instanceof StaticFieldKey;
-            }
-          };
+          Predicate<PointerKey> staticFilter = StaticFieldKey.class::isInstance;
           final Collection<PointerKey> kill = Iterator2Collection
-              .toSet(new FilterIterator<PointerKey>(mod.iterator(), staticFilter));
+              .toSet(new FilterIterator<>(mod.iterator(), staticFilter));
           if (kill.isEmpty()) {
             return null;
           } else {
-            Predicate f = new Predicate() {
-              // accept any statement which writes a killed location.
-              @Override public boolean test(Object o) {
-                Statement s = (Statement) o;
-                Collection m = getMod(s, node, heapModel, pa, exclusions);
-                for (PointerKey k : kill) {
-                  if (m.contains(k)) {
-                    return true;
-                  }
+            Predicate<Statement> f = s1 -> {
+              Collection m = getMod(s1, node, heapModel, pa, exclusions);
+              for (PointerKey k : kill) {
+                if (m.contains(k)) {
+                  return true;
                 }
-                return false;
               }
+              return false;
             };
             BitVector result = new BitVector();
-            for (Statement k : Iterator2Iterable.make(new FilterIterator<Statement>(domain.iterator(), f))) {
+            for (Statement k : Iterator2Iterable.make(new FilterIterator<>(domain.iterator(), f))) {
               result.set(domain.getMappedIndex(k));
             }
             return result;

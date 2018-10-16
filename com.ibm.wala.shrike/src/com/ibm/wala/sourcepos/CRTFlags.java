@@ -26,7 +26,7 @@ import java.util.LinkedList;
  * @see CRTData
  * @see CRTable
  * @author Siegfried Weber
- * @author Juergen Graf <juergen.graf@gmail.com>
+ * @author Juergen Graf &lt;juergen.graf@gmail.com&gt;
  */
 public final class CRTFlags {
 
@@ -70,7 +70,7 @@ public final class CRTFlags {
    * @return An array of Strings containing the flag names.
    */
   public final String[] getFlagNames() {
-    LinkedList<String> names = new LinkedList<String>();
+    LinkedList<String> names = new LinkedList<>();
     int index = 0;
     short tFlags = flags;
     while (tFlags > 0) {

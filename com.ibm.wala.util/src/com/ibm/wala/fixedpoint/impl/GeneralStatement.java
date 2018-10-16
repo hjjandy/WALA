@@ -17,7 +17,7 @@ import com.ibm.wala.fixpoint.IVariable;
 /**
  * Represents a single step in an iterative solver
  */
-public abstract class GeneralStatement<T extends IVariable<?>> extends AbstractStatement<T, AbstractOperator<T>> {
+public abstract class GeneralStatement<T extends IVariable<T>> extends AbstractStatement<T, AbstractOperator<T>> {
 
   protected final T lhs;
 
@@ -61,8 +61,8 @@ public abstract class GeneralStatement<T extends IVariable<?>> extends AbstractS
     if (lhs == cell) {
       return true;
     }
-    for (int i = 0; i < rhs.length; i++) {
-      if (rhs[i] == cell)
+    for (T rh : rhs) {
+      if (rh == cell)
         return true;
     }
     return false;

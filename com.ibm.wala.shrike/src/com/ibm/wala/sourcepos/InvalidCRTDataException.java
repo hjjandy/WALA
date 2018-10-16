@@ -26,7 +26,7 @@ import java.util.LinkedList;
  * @see CRTData
  * @see CRTFlags
  * @author Siegfried Weber
- * @author Juergen Graf <juergen.graf@gmail.com>
+ * @author Juergen Graf &lt;juergen.graf@gmail.com&gt;
  */
 class InvalidCRTDataException extends Exception {
 
@@ -64,7 +64,7 @@ class InvalidCRTDataException extends Exception {
    */
   InvalidCRTDataException(String msg, Object... data) {
     super(msg);
-    this.data = new LinkedList<Object>();
+    this.data = new LinkedList<>();
     for (Object o : data)
       this.data.add(o);
   }

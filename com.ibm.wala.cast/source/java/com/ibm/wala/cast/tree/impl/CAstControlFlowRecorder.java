@@ -12,7 +12,6 @@ package com.ibm.wala.cast.tree.impl;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -40,15 +39,15 @@ import com.ibm.wala.cast.tree.CAstSourcePositionMap;
 public class CAstControlFlowRecorder implements CAstControlFlowMap {
   private final CAstSourcePositionMap src;
 
-  private final Map<CAstNode, Object> CAstToNode = new LinkedHashMap<CAstNode, Object>();
+  private final Map<CAstNode, Object> CAstToNode = new LinkedHashMap<>();
 
-  private final Map<Object, CAstNode> nodeToCAst = new LinkedHashMap<Object, CAstNode>();
+  private final Map<Object, CAstNode> nodeToCAst = new LinkedHashMap<>();
 
-  private final Map<Key, Object> table = new LinkedHashMap<Key, Object>();
+  private final Map<Key, Object> table = new LinkedHashMap<>();
 
-  private final Map<Object, Set<Object>> labelMap = new LinkedHashMap<Object, Set<Object>>();
+  private final Map<Object, Set<Object>> labelMap = new LinkedHashMap<>();
 
-  private final Map<Object, Set<Object>> sourceMap = new LinkedHashMap<Object, Set<Object>>();
+  private final Map<Object, Set<Object>> sourceMap = new LinkedHashMap<>();
 
   /**
    * for optimizing {@link #getMappedNodes()}; methods that change the set of
@@ -106,15 +105,16 @@ public class CAstControlFlowRecorder implements CAstControlFlowMap {
 
   @Override
   public Collection<Object> getTargetLabels(CAstNode from) {
-    if (labelMap.containsKey(CAstToNode.get(from))) {
-      return labelMap.get(CAstToNode.get(from));
+    Object node = CAstToNode.get(from);
+    if (labelMap.containsKey(node)) {
+      return labelMap.get(node);
     } else {
       return Collections.emptySet();
     }
   }
 
   @Override
-  public Collection getSourceNodes(CAstNode to) {
+  public Set<Object> getSourceNodes(CAstNode to) {
     if (sourceMap.containsKey(CAstToNode.get(to))) {
       return sourceMap.get(CAstToNode.get(to));
     } else {
@@ -126,9 +126,8 @@ public class CAstControlFlowRecorder implements CAstControlFlowMap {
   public Collection<CAstNode> getMappedNodes() {
     Collection<CAstNode> nodes = cachedMappedNodes;
     if (nodes == null) {
-      nodes = new LinkedHashSet<CAstNode>();
-      for (Iterator<Key> keys = table.keySet().iterator(); keys.hasNext();) {
-        Key key = keys.next();
+      nodes = new LinkedHashSet<>();
+      for (Key key : table.keySet()) {
         nodes.add(nodeToCAst.get(key.from));
         nodes.add(nodeToCAst.get(table.get(key)));
       }
@@ -159,12 +158,12 @@ public class CAstControlFlowRecorder implements CAstControlFlowMap {
 
     Set<Object> ls = labelMap.get(from);
     if (ls == null)
-      labelMap.put(from, ls = new LinkedHashSet<Object>(2));
+      labelMap.put(from, ls = new LinkedHashSet<>(2));
     ls.add(label);
 
     Set<Object> ss = sourceMap.get(to);
     if (ss == null)
-      sourceMap.put(to, ss = new LinkedHashSet<Object>(2));
+      sourceMap.put(to, ss = new LinkedHashSet<>(2));
     ss.add(from);
   }
 
@@ -202,8 +201,7 @@ public class CAstControlFlowRecorder implements CAstControlFlowMap {
   @Override
   public String toString() {
     StringBuffer sb = new StringBuffer("control flow map\n");
-    for (Iterator keys = table.keySet().iterator(); keys.hasNext();) {
-      Key key = (Key) keys.next();
+    for (Key key : table.keySet()) {
       sb.append(key.from);
       if (src != null && nodeToCAst.get(key.from) != null && src.getPosition(nodeToCAst.get(key.from)) != null) {
         sb.append(" (").append(src.getPosition(nodeToCAst.get(key.from))).append(") ");

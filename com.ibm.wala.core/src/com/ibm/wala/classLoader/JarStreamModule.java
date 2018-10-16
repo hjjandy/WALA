@@ -29,13 +29,11 @@ import com.ibm.wala.util.warnings.Warnings;
 /**
  * Read in a jar file from an input stream. Most parts are copied from the NestedJarFileModule class
  * and adapted to work with an input stream. 
- * @author Juergen Graf <juergen.graf@gmail.com>
+ * @author Juergen Graf &lt;juergen.graf@gmail.com&gt;
  */
-public class JarStreamModule implements Module {
+public class JarStreamModule extends JarInputStream implements Module {
 
   private static final boolean DEBUG = false;
-
-  private final JarInputStream stream;
 
   /**
    * For efficiency, we cache the byte[] holding each ZipEntry's contents; this will help avoid multiple unzipping TODO: use a soft
@@ -43,12 +41,8 @@ public class JarStreamModule implements Module {
    */
   private HashMap<String, byte[]> cache = null;
 
-  public JarStreamModule(JarInputStream stream) {
-    if (stream == null) {
-      throw new IllegalArgumentException("null stream");
-    }
-    
-    this.stream = stream;
+  public JarStreamModule(InputStream stream) throws IOException {
+    super(stream);
   }
 
   public InputStream getInputStream(String name) {
@@ -63,7 +57,7 @@ public class JarStreamModule implements Module {
     }
     cache = HashMapFactory.make();
     try {
-      for (ZipEntry z = stream.getNextEntry(); z != null; z = stream.getNextEntry()) {
+      for (ZipEntry z = getNextEntry(); z != null; z = getNextEntry()) {
         final String name = z.getName();
         if (DEBUG) {
           System.err.println(("got entry: " + name));
@@ -71,10 +65,10 @@ public class JarStreamModule implements Module {
         if (FileSuffixes.isClassFile(name) || FileSuffixes.isSourceFile(name)) {
           ByteArrayOutputStream out = new ByteArrayOutputStream();
           byte[] temp = new byte[1024];
-          int n = stream.read(temp);
+          int n = read(temp);
           while (n != -1) {
             out.write(temp, 0, n);
-            n = stream.read(temp);
+            n = read(temp);
           }
           byte[] bb = out.toByteArray();
           cache.put(name, bb);
@@ -102,6 +96,7 @@ public class JarStreamModule implements Module {
   /*
    * @see com.ibm.wala.classLoader.Module#getEntries()
    */
+  @Override
   public Iterator<ModuleEntry> getEntries() {
     populateCache();
     final Iterator<String> it = cache.keySet().iterator();
@@ -119,16 +114,19 @@ public class JarStreamModule implements Module {
         }
       }
 
+      @Override
       public boolean hasNext() {
         return next != null;
       }
 
+      @Override
       public ModuleEntry next() {
         ModuleEntry result = new Entry(next);
         advance();
         return result;
       }
 
+      @Override
       public void remove() {
         Assertions.UNREACHABLE();
       }
@@ -149,6 +147,7 @@ public class JarStreamModule implements Module {
     /*
      * @see com.ibm.wala.classLoader.ModuleEntry#getName()
      */
+    @Override
     public String getName() {
       return name;
     }
@@ -156,6 +155,7 @@ public class JarStreamModule implements Module {
     /*
      * @see com.ibm.wala.classLoader.ModuleEntry#isClassFile()
      */
+    @Override
     public boolean isClassFile() {
       return FileSuffixes.isClassFile(getName());
     }
@@ -163,6 +163,7 @@ public class JarStreamModule implements Module {
     /*
      * @see com.ibm.wala.classLoader.ModuleEntry#getInputStream()
      */
+    @Override
     public InputStream getInputStream() {
       return JarStreamModule.this.getInputStream(name);
     }
@@ -170,6 +171,7 @@ public class JarStreamModule implements Module {
     /*
      * @see com.ibm.wala.classLoader.ModuleEntry#isModuleFile()
      */
+    @Override
     public boolean isModuleFile() {
       return false;
     }
@@ -177,6 +179,7 @@ public class JarStreamModule implements Module {
     /*
      * @see com.ibm.wala.classLoader.ModuleEntry#asModule()
      */
+    @Override
     public Module asModule() {
       Assertions.UNREACHABLE();
       return null;
@@ -190,6 +193,7 @@ public class JarStreamModule implements Module {
     /*
      * @see com.ibm.wala.classLoader.ModuleEntry#getClassName()
      */
+    @Override
     public String getClassName() {
       return FileSuffixes.stripSuffix(getName());
     }
@@ -197,6 +201,7 @@ public class JarStreamModule implements Module {
     /*
      * @see com.ibm.wala.classLoader.ModuleEntry#isSourceFile()
      */
+    @Override
     public boolean isSourceFile() {
       return FileSuffixes.isSourceFile(getName());
     }
@@ -242,14 +247,14 @@ public class JarStreamModule implements Module {
 
   @Override
   public String toString() {
-    return "Jar input stream " + stream.toString();
+    return "Jar input stream " + super.toString();
   }
 
   @Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
-    result = prime * result + (stream.hashCode());
+    result = prime * result + (super.hashCode());
     return result;
   }
 
@@ -262,7 +267,7 @@ public class JarStreamModule implements Module {
     if (getClass() != obj.getClass())
       return false;
     JarStreamModule other = (JarStreamModule) obj;
-    return stream.equals(other.stream);
+    return super.equals(other);
   }
 
 }

@@ -14,11 +14,11 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Logger;
 
 import com.ibm.wala.util.PlatformUtil;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 
 /**
  * A Java process launcher
@@ -84,7 +84,7 @@ public class JavaLauncher extends Launcher {
   /**
    * Paths that will be added to the default classpath
    */
-  private final List<String> xtraClasspath = new ArrayList<String>();
+  private final List<String> xtraClasspath = new ArrayList<>();
 
   /**
    * A {@link Thread} which spins and drains stdout of the running process.
@@ -104,7 +104,7 @@ public class JavaLauncher extends Launcher {
   /**
    * Extra args to pass to the JVM
    */
-  private List<String> vmArgs = new ArrayList<String>();
+  private List<String> vmArgs = new ArrayList<>();
 
   /**
    * The last process returned by a call to start() on this object.
@@ -180,7 +180,7 @@ public class JavaLauncher extends Launcher {
     // Java process
     String signalParam = PlatformUtil.onMacOSX() ? "-Xrs" : null;
 
-    List<String> cmd = new ArrayList<String>();
+    List<String> cmd = new ArrayList<>();
 
     cmd.add(javaExe);
     cmd.add(heap);
@@ -225,7 +225,7 @@ public class JavaLauncher extends Launcher {
     return lastProcess;
   }
 
-  private String makeLibPath() {
+  private static String makeLibPath() {
     String libPath = System.getProperty("java.library.path");
     if (libPath == null) {
       return null;
@@ -269,9 +269,9 @@ public class JavaLauncher extends Launcher {
     if (getXtraClassPath() == null || getXtraClassPath().isEmpty()) {
       return cp.trim();
     } else {
-      for (Iterator<String> it = getXtraClassPath().iterator(); it.hasNext();) {
+      for (String p : Iterator2Iterable.make(getXtraClassPath().iterator())) {
         cp += File.pathSeparatorChar;
-        cp += it.next();
+        cp += p;
       }
       return cp.trim();
     }

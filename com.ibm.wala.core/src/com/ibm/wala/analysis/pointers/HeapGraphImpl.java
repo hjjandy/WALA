@@ -18,9 +18,7 @@ import com.ibm.wala.ipa.callgraph.propagation.HeapModel;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
-import com.ibm.wala.util.Predicate;
 import com.ibm.wala.util.graph.Graph;
-import com.ibm.wala.util.graph.NumberedGraph;
 import com.ibm.wala.util.graph.impl.NumberedNodeIterator;
 import com.ibm.wala.util.graph.traverse.DFS;
 import com.ibm.wala.util.intset.IntSet;
@@ -48,16 +46,12 @@ public abstract class HeapGraphImpl<T extends InstanceKey> implements HeapGraph<
 
   @Override
   public Iterator<Object> iterateNodes(IntSet s) {
-    return new NumberedNodeIterator<Object>(s, this);
+    return new NumberedNodeIterator<>(s, this);
   }
 
+  @Override
   public Collection<Object> getReachableInstances(Set<Object> roots) {
-    Predicate f = new Predicate() {
-      @Override public boolean test(Object o) {
-        return (o instanceof InstanceKey);
-      }
-    };
-    return DFS.getReachableNodes(this, roots, f);
+    return DFS.getReachableNodes(this, roots, InstanceKey.class::isInstance);
   }
 
   @Override
@@ -68,10 +62,12 @@ public abstract class HeapGraphImpl<T extends InstanceKey> implements HeapGraph<
   /**
    * @return the heap model used in this pointer analysis.
    */
+  @Override
   public HeapModel getHeapModel() {
     return pa.getHeapModel();
   }
 
+  @Override
   public PointerAnalysis<T> getPointerAnalysis() {
     return pa;
   }

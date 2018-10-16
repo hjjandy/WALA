@@ -10,11 +10,12 @@
  *******************************************************************************/
 package com.ibm.wala.util.graph.traverse;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
-import java.util.Stack;
 
 import com.ibm.wala.util.collections.EmptyIterator;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.collections.NonNullSingletonIterator;
 import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.graph.NumberedGraph;
@@ -24,8 +25,9 @@ import com.ibm.wala.util.graph.NumberedGraph;
  * increasing discover time. This class follows the outNodes of the graph nodes to define the graph, but this behavior can be
  * changed by overriding the getConnected method.
  */
-public abstract class DFSDiscoverTimeIterator<T> extends Stack<T> implements Iterator<T> {
+public abstract class DFSDiscoverTimeIterator<T> extends ArrayList<T> implements Iterator<T> {
 
+  private static final long serialVersionUID = 4238700455408861924L;
   /**
    * an enumeration of all nodes to search from
    */
@@ -48,7 +50,7 @@ public abstract class DFSDiscoverTimeIterator<T> extends Stack<T> implements Ite
    * subclass constructors must call this!
    */
   protected void init(T N) {
-    init(new NonNullSingletonIterator<T>(N));
+    init(new NonNullSingletonIterator<>(N));
   }
 
   /**
@@ -84,8 +86,7 @@ public abstract class DFSDiscoverTimeIterator<T> extends Stack<T> implements Ite
     assert getPendingChildren(toReturn) != null;
     do {
       T stackTop = peek();
-      for (Iterator<? extends T> it = getPendingChildren(stackTop); it.hasNext();) {
-        T child = it.next();
+      for (T child : Iterator2Iterable.make(getPendingChildren(stackTop))) {
         if (getPendingChildren(child) == null) {
           // found a new child.
           visitEdge(stackTop, child);
@@ -136,4 +137,23 @@ public abstract class DFSDiscoverTimeIterator<T> extends Stack<T> implements Ite
   protected void visitEdge(T from, T to) {
     // do nothing. subclasses will override.
   }
+  
+  private boolean empty() {
+    return size() == 0;
+  }
+
+  private void push(T elt) {
+    add(elt);
+  }
+  
+  private T peek() {
+    return get(size()-1); 
+  }
+  
+  private T pop() {
+    T e = get(size()-1);
+    remove(size()-1);
+    return e;
+  }
+
 }

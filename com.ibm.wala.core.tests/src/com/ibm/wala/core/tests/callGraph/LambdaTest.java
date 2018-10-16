@@ -11,7 +11,6 @@
 package com.ibm.wala.core.tests.callGraph;
 
 import java.io.IOException;
-import java.util.Iterator;
 import java.util.Set;
 
 import org.junit.Assert;
@@ -20,7 +19,7 @@ import org.junit.Test;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.core.tests.util.TestConstants;
 import com.ibm.wala.core.tests.util.WalaTestCase;
-import com.ibm.wala.ipa.callgraph.AnalysisCache;
+import com.ibm.wala.ipa.callgraph.AnalysisCacheImpl;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.AnalysisScope;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -28,11 +27,13 @@ import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.Entrypoint;
 import com.ibm.wala.ipa.cha.ClassHierarchy;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
+import com.ibm.wala.ipa.cha.ClassHierarchyFactory;
 import com.ibm.wala.types.ClassLoaderReference;
 import com.ibm.wala.types.Descriptor;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.CancelException;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.strings.Atom;
 
 /**
@@ -40,15 +41,46 @@ import com.ibm.wala.util.strings.Atom;
  */
 public class LambdaTest extends WalaTestCase {
 
+  @Test public void testBug144() throws IOException, ClassHierarchyException, IllegalArgumentException, CancelException {
+    AnalysisScope scope = CallGraphTestUtil.makeJ2SEAnalysisScope(TestConstants.WALA_TESTDATA, CallGraphTestUtil.REGRESSION_EXCLUSIONS);
+    ClassHierarchy cha = ClassHierarchyFactory.make(scope);
+    Iterable<Entrypoint> entrypoints = com.ibm.wala.ipa.callgraph.impl.Util.makeMainEntrypoints(scope, cha,
+        "Lbug144/A");
+    AnalysisOptions options = CallGraphTestUtil.makeAnalysisOptions(scope, entrypoints);
+
+    @SuppressWarnings("unused")
+    CallGraph cg = CallGraphTestUtil.buildZeroCFA(options, new AnalysisCacheImpl(), cha, scope, false);
+  }
+  
+  @Test public void testBug137() throws IOException, ClassHierarchyException, IllegalArgumentException, CancelException {
+    AnalysisScope scope = CallGraphTestUtil.makeJ2SEAnalysisScope(TestConstants.WALA_TESTDATA, CallGraphTestUtil.REGRESSION_EXCLUSIONS);
+    ClassHierarchy cha = ClassHierarchyFactory.make(scope);
+    Iterable<Entrypoint> entrypoints = com.ibm.wala.ipa.callgraph.impl.Util.makeMainEntrypoints(scope, cha,
+        "Lspecial/A");
+    AnalysisOptions options = CallGraphTestUtil.makeAnalysisOptions(scope, entrypoints);
+
+    CallGraph cg = CallGraphTestUtil.buildZeroCFA(options, new AnalysisCacheImpl(), cha, scope, false);
+ 
+    TypeReference A = TypeReference.findOrCreate(ClassLoaderReference.Application, "Lspecial/A");
+
+    MethodReference ct = MethodReference.findOrCreate(A, Atom.findOrCreateUnicodeAtom("<init>"), Descriptor.findOrCreateUTF8("()V"));
+    Set<CGNode> ctnodes = cg.getNodes(ct);    
+    Assert.assertEquals(1, ctnodes.size());
+
+    MethodReference ts = MethodReference.findOrCreate(A, Atom.findOrCreateUnicodeAtom("toString"), Descriptor.findOrCreateUTF8("()Ljava/lang/String;"));
+    Set<CGNode> tsnodes = cg.getNodes(ts);    
+    Assert.assertEquals(1, tsnodes.size());
+}
+  
   @Test public void testSortingExample() throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
 
     AnalysisScope scope = CallGraphTestUtil.makeJ2SEAnalysisScope(TestConstants.WALA_TESTDATA, CallGraphTestUtil.REGRESSION_EXCLUSIONS);
-    ClassHierarchy cha = ClassHierarchy.make(scope);
+    ClassHierarchy cha = ClassHierarchyFactory.make(scope);
     Iterable<Entrypoint> entrypoints = com.ibm.wala.ipa.callgraph.impl.Util.makeMainEntrypoints(scope, cha,
         "Llambda/SortingExample");
     AnalysisOptions options = CallGraphTestUtil.makeAnalysisOptions(scope, entrypoints);
 
-    CallGraph cg = CallGraphTestUtil.buildZeroCFA(options, new AnalysisCache(), cha, scope, false);
+    CallGraph cg = CallGraphTestUtil.buildZeroCFA(options, new AnalysisCacheImpl(), cha, scope, false);
     
     // Find compareTo
     TypeReference str = TypeReference.findOrCreate(ClassLoaderReference.Primordial, "Ljava/lang/String");
@@ -71,8 +103,8 @@ public class LambdaTest extends WalaTestCase {
     // caller of id1 is dynamic from sortForward, and has 1 compareTo
     CGNode sfnode = cg.getPredNodes(id1node).next();
     int count = 0;
-    for(Iterator<CallSiteReference> sites = sfnode.iterateCallSites(); sites.hasNext(); ) {
-     if (ctnodes.containsAll(cg.getPossibleTargets(sfnode, sites.next()))) {
+    for(CallSiteReference site : Iterator2Iterable.make(sfnode.iterateCallSites())) {
+     if (ctnodes.containsAll(cg.getPossibleTargets(sfnode, site))) {
        count++;
      }
     }

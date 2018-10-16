@@ -43,7 +43,6 @@ package com.ibm.wala.dalvik.ipa.callgraph.androidModel.stubs;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.logging.Logger;
 
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
@@ -52,8 +51,8 @@ import com.ibm.wala.dalvik.ipa.callgraph.androidModel.AndroidModelClass;
 import com.ibm.wala.dalvik.ipa.callgraph.impl.AndroidEntryPoint;
 import com.ibm.wala.dalvik.util.AndroidComponent;
 import com.ibm.wala.dalvik.util.AndroidTypes;
-import com.ibm.wala.ipa.callgraph.AnalysisCache;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
+import com.ibm.wala.ipa.callgraph.IAnalysisCacheView;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ipa.summaries.MethodSummary;
 import com.ibm.wala.ipa.summaries.SummarizedMethod;
@@ -79,7 +78,7 @@ import com.ibm.wala.util.strings.Atom;
  *
  *  @see    com.ibm.wala.dalvik.ipa.callgraph.propagation.cfa.IntentContextInterpreter
  *
- *  @author Tobias Blaschke <code@tobiasblaschke.de>
+ *  @author Tobias Blaschke &lt;code@tobiasblaschke.de&gt;
  *  @since  2013-10-15
  */
 public class ExternalModel extends AndroidModel {
@@ -99,7 +98,7 @@ public class ExternalModel extends AndroidModel {
         return false;
     }
 
-    public ExternalModel(final IClassHierarchy cha, final AnalysisOptions options, final AnalysisCache cache, 
+    public ExternalModel(final IClassHierarchy cha, final AnalysisOptions options, final IAnalysisCacheView cache, 
             AndroidComponent target) {
         super(cha, options, cache);
         
@@ -221,7 +220,7 @@ public class ExternalModel extends AndroidModel {
             final CallSiteReference site = CallSiteReference.make(callPC, mRef, IInvokeInstruction.Dispatch.VIRTUAL);
             final SSAValue exception = new SSAValue(nextLocal++, TypeReference.JavaLangException, this.mRef, "exception");
             outBundle = new SSAValue(nextLocal++, inBundle);
-            final List<SSAValue> params = new ArrayList<SSAValue>(1);
+            final List<SSAValue> params = new ArrayList<>(1);
             params.add(inIntent);
             final SSAInstruction invokation = instructionFactory.InvokeInstruction(callPC, outBundle, 
                     params, exception, site);
@@ -277,7 +276,7 @@ public class ExternalModel extends AndroidModel {
             final CallSiteReference site = CallSiteReference.make(callPC, mRef, IInvokeInstruction.Dispatch.VIRTUAL);
             final SSAValue exception = new SSAValue(nextLocal++, TypeReference.JavaLangException, this.mRef, "exception");
             outIntent = new SSAValue(nextLocal++, inIntent);
-            final List<SSAValue> params = new ArrayList<SSAValue>(3);
+            final List<SSAValue> params = new ArrayList<>(3);
             params.add(inIntent);
             params.add(outName);
             params.add(outValue);

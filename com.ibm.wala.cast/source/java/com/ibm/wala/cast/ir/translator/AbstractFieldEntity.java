@@ -23,7 +23,7 @@ import com.ibm.wala.cast.tree.CAstQualifier;
 import com.ibm.wala.cast.tree.CAstType;
 import com.ibm.wala.util.debug.Assertions;
 
-class AbstractFieldEntity extends AbstractDataEntity {
+public abstract class AbstractFieldEntity extends AbstractDataEntity {
   private final String name;
 
   private final Set<CAstQualifier> modifiers;
@@ -34,7 +34,7 @@ class AbstractFieldEntity extends AbstractDataEntity {
     this.name = name;
     this.declaringClass = declaringClass;
 
-    this.modifiers = new HashSet<CAstQualifier>();
+    this.modifiers = new HashSet<>();
     if (modifiers != null) {
       this.modifiers.addAll(modifiers);
     }

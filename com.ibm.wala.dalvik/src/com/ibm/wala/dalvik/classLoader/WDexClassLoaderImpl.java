@@ -50,10 +50,8 @@ package com.ibm.wala.dalvik.classLoader;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
-import java.util.TreeSet;
 
 import com.ibm.wala.classLoader.ClassLoaderImpl;
 import com.ibm.wala.classLoader.IClass;
@@ -63,9 +61,8 @@ import com.ibm.wala.classLoader.ModuleEntry;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.types.ClassLoaderReference;
 import com.ibm.wala.types.TypeName;
-import com.ibm.wala.util.collections.HashCodeComparator;
 import com.ibm.wala.util.collections.HashSetFactory;
-import com.ibm.wala.util.collections.Iterator2Collection;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.config.SetOfClasses;
 import com.ibm.wala.util.warnings.Warning;
 import com.ibm.wala.util.warnings.Warnings;
@@ -104,15 +101,13 @@ public class WDexClassLoaderImpl extends ClassLoaderImpl {
         // module are loaded according to the given order (same as in Java VM)
         Set<ModuleEntry> classModuleEntries = HashSetFactory.make();
         
-        for (Iterator<Module> it = modules.iterator(); it.hasNext();) {
-            Module archive = it.next();
+        for (Module archive : modules) {
             Set<ModuleEntry> classFiles = getDexFiles(archive);
             
             removeClassFiles(classFiles, classModuleEntries);
             loadAllDexClasses(classFiles);
             
-            for (Iterator<ModuleEntry> it2 = classFiles.iterator(); it2.hasNext();) {
-            	ModuleEntry file = it2.next();
+            for (ModuleEntry file : classFiles) {
             	classModuleEntries.add(file);
             }
         }                       
@@ -122,15 +117,13 @@ public class WDexClassLoaderImpl extends ClassLoaderImpl {
     /**
      * Remove from s any class file module entries which already are in t
      */
-    private void removeClassFiles(Set<ModuleEntry> s, Set<ModuleEntry> t) {
+    private static void removeClassFiles(Set<ModuleEntry> s, Set<ModuleEntry> t) {
     	Set<String> old = HashSetFactory.make();
-    	for (Iterator<ModuleEntry> it = t.iterator(); it.hasNext();) {
-    		ModuleEntry m = it.next();
+    	for (ModuleEntry m : t) {
     		old.add(m.getClassName());
     	}
     	HashSet<ModuleEntry> toRemove = HashSetFactory.make();
-    	for (Iterator<ModuleEntry> it = s.iterator(); it.hasNext();) {
-    		ModuleEntry m = it.next();
+    	for (ModuleEntry m : s) {
     		if (old.contains(m.getClassName())) {
     			toRemove.add(m);
     		}
@@ -138,12 +131,9 @@ public class WDexClassLoaderImpl extends ClassLoaderImpl {
     	s.removeAll(toRemove);
     }
     
-    private Set<ModuleEntry> getDexFiles(Module M) throws IOException {
-    	TreeSet<ModuleEntry> sortedEntries = new TreeSet<ModuleEntry>(HashCodeComparator.instance());
-    	sortedEntries.addAll(Iterator2Collection.toSet(M.getEntries()));
+    private static Set<ModuleEntry> getDexFiles(Module M) {
     	HashSet<ModuleEntry> result = HashSetFactory.make();
-    	for (Iterator<ModuleEntry> it = sortedEntries.iterator(); it.hasNext();) {
-    		ModuleEntry entry = (ModuleEntry) it.next();
+    	for (ModuleEntry entry : Iterator2Iterable.make(M.getEntries())) {
     		if (entry instanceof DexModuleEntry) {    		
     			result.add(entry);
     		} 
@@ -152,11 +142,10 @@ public class WDexClassLoaderImpl extends ClassLoaderImpl {
     }
     
     
-    private void loadAllDexClasses(Collection<ModuleEntry> moduleEntries) {
+    @SuppressWarnings("unused")
+	private void loadAllDexClasses(Collection<ModuleEntry> moduleEntries) {
     	
-    	for (Iterator<ModuleEntry> it = moduleEntries.iterator(); it.hasNext();) {
-    		ModuleEntry entry = it.next();
-
+    	for (ModuleEntry entry : moduleEntries) {
     		// Dalvik class
     		if (entry instanceof DexModuleEntry) {
     			DexModuleEntry dexEntry = ((DexModuleEntry) entry);

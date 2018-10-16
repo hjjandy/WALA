@@ -49,14 +49,16 @@ package com.ibm.wala.dalvik.classLoader;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.jar.JarFile;
 
-import org.jf.dexlib.ClassDefItem;
-import org.jf.dexlib.DexFile;
-import org.jf.dexlib.Section;
+import org.jf.dexlib2.DexFileFactory;
+import org.jf.dexlib2.Opcodes;
+import org.jf.dexlib2.iface.ClassDef;
+import org.jf.dexlib2.iface.DexFile;
 
 import com.ibm.wala.classLoader.Module;
 import com.ibm.wala.classLoader.ModuleEntry;
@@ -68,23 +70,26 @@ import com.ibm.wala.util.io.TemporaryFile;
  * @author barjo
  */
 public class DexFileModule implements Module {
+	private final File f;
     private final DexFile dexfile;
     private final Collection<ModuleEntry> entries;
 
     public static DexFileModule make(File f) throws IllegalArgumentException, IOException {
     	if (f.getName().endsWith("jar")) {
-    		return new DexFileModule(new JarFile(f));
+    		try (final JarFile jar = new JarFile(f)) {
+    			return new DexFileModule(jar);
+    		}
     	} else {
     		return new DexFileModule(f);
     	}
     }
     
-    private static File tf(JarFile f) {
+    private static File tf(JarFile f) throws IOException {
     	String name = f.getName();
     	if (name.indexOf('/') >= 0) {
     		name = name.substring(name.lastIndexOf('/')+1);
     	}
-    	File tf = new File(System.getProperty("java.io.tmpdir") + "/" + name + "_classes.dex");
+    	File tf = Files.createTempFile("name", "_classes.dex").toFile();
     	tf.deleteOnExit();
     	return tf;
     }
@@ -100,17 +105,41 @@ public class DexFileModule implements Module {
      */
     private DexFileModule(File f) throws IllegalArgumentException {    	
         try {
-            dexfile = new DexFile(f);
+        		this.f = f;
+            dexfile = DexFileFactory.loadDexFile(f, Opcodes.forApi(24));
         } catch (IOException e) {
             throw new IllegalArgumentException(e);
         }
 
         // create ModuleEntries from ClassDefItem
-        entries = new HashSet<ModuleEntry>();
+        entries = new HashSet<>();
 
-        Section<ClassDefItem> cldeff = dexfile.ClassDefsSection;
-        for (ClassDefItem cdefitems : cldeff.getItems()) {
-            entries.add(new DexModuleEntry(cdefitems));
+        for (ClassDef cdefitems : dexfile.getClasses()) {
+            entries.add(new DexModuleEntry(cdefitems, this));
+        }
+    }
+
+    /**
+     * @param f
+     *            the .dex or .apk file
+     * @param entry
+     *            the name of the .dex file inside the apk
+     * @param apiLevel
+     *            the api level wanted
+     * @throws IllegalArgumentException
+     */
+    public DexFileModule(File f, String entry, int apiLevel) throws IllegalArgumentException {
+        try {
+            this.f = f;
+            dexfile = DexFileFactory.loadDexEntry(f, entry,true, Opcodes.forApi(apiLevel));
+        } catch (IOException e) {
+            throw new IllegalArgumentException(e);
+        }
+
+        // create ModuleEntries from ClassDefItem
+        entries = new HashSet<>();
+        for (ClassDef cdefitems : dexfile.getClasses()) {
+            entries.add(new DexModuleEntry(cdefitems, this));
         }
     }
 
@@ -121,11 +150,19 @@ public class DexFileModule implements Module {
         return dexfile;
     }
 
+    /**
+     * @return The DexFile associated to this module.
+     */
+    public File getFile() {
+        return f;
+    }
+
     /*
      * (non-Javadoc)
      *
      * @see com.ibm.wala.classLoader.Module#getEntries()
      */
+    @Override
     public Iterator<ModuleEntry> getEntries() {
         return entries.iterator();
     }

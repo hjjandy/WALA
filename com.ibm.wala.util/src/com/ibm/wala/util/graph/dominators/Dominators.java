@@ -18,6 +18,7 @@ import java.util.Set;
 import com.ibm.wala.util.collections.EmptyIterator;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.collections.NonNullSingletonIterator;
 import com.ibm.wala.util.debug.Assertions;
 import com.ibm.wala.util.graph.AbstractGraph;
@@ -79,9 +80,9 @@ public abstract class Dominators<T> {
 
   public static <T> Dominators<T> make(Graph<T> G, T root) {
     if (G instanceof NumberedGraph) {
-      return new NumberedDominators<T>((NumberedGraph<T>) G, root);
+      return new NumberedDominators<>((NumberedGraph<T>) G, root);
     } else {
-      return new GenericDominators<T>(G, root);
+      return new GenericDominators<>(G, root);
     }
   }
 
@@ -96,10 +97,6 @@ public abstract class Dominators<T> {
         return true;
 
     return false;
-  }
-
-  public Graph<T> getGraph() {
-    return G;
   }
 
   /**
@@ -156,8 +153,7 @@ public abstract class Dominators<T> {
         private final Map<T, Set<T>> nextMap = HashMapFactory.make();
 
         {
-          for (Iterator<? extends T> ns = G.iterator(); ns.hasNext();) {
-            T n = ns.next();
+          for (T n : G) {
             if (n != root) {
               T prev = getIdom(n);
               Set<T> next = nextMap.get(prev);
@@ -173,7 +169,7 @@ public abstract class Dominators<T> {
           if (N == root)
             return EmptyIterator.instance();
           else
-            return new NonNullSingletonIterator<T>(getIdom(N));
+            return new NonNullSingletonIterator<>(getIdom(N));
         }
 
         @Override
@@ -356,7 +352,7 @@ public abstract class Dominators<T> {
   /**
    * This method inspects the passed node and returns the following: node, if node is a root of a tree in the forest
    * 
-   * any vertex, u != r such that otherwise r is the root of the tree containing node and * semi(u) is minimum on the path r -> v
+   * any vertex, u != r such that otherwise r is the root of the tree containing node and * semi(u) is minimum on the path r -&gt; v
    * 
    * See TOPLAS 1(1), July 1979, p 128 for details.
    * 
@@ -585,11 +581,10 @@ public abstract class Dominators<T> {
   @Override
   public String toString() {
     StringBuffer sb = new StringBuffer();
-    for (Iterator<? extends T> i = G.iterator(); i.hasNext();) {
-      T node = i.next();
+    for (T node : G) {
       sb.append("Dominators of " + node + ":\n");
-      for (Iterator<T> j = dominators(node); j.hasNext();)
-        sb.append("   " + j.next() + "\n");
+      for (T dom : Iterator2Iterable.make(dominators(node)))
+        sb.append("   " + dom + "\n");
       sb.append("\n");
     }
     return sb.toString();

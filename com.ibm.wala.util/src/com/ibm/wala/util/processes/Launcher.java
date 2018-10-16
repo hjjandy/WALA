@@ -15,8 +15,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.logging.Logger;
 
@@ -126,11 +126,10 @@ public abstract class Launcher {
     return p;
   }
 
-  private String[] buildEnv(Map<String,String> ev) {
+  private static String[] buildEnv(Map<String,String> ev) {
     String[] result = new String[ev.size()];
     int i = 0;
-    for (Iterator<Map.Entry<String,String>> it = ev.entrySet().iterator(); it.hasNext();) {
-      Map.Entry<String,String> e = it.next();
+    for (Map.Entry<String, String> e : ev.entrySet()) {
       result[i++] = e.getKey() + "=" + e.getValue();
     }
     return result;
@@ -273,12 +272,12 @@ public abstract class Launcher {
   /**
    * Drain some data from the input stream, and print said data to p.  Do not block.
    */
-  private void drainAndPrint(BufferedInputStream s, PrintStream p) throws IOException {
+  private static void drainAndPrint(BufferedInputStream s, PrintStream p) {
     try {
       while (s.available() > 0) {
         byte[] data = new byte[s.available()];
         s.read(data);
-        p.print(new String(data));
+        p.print(new String(data, StandardCharsets.UTF_8));
       }
     } catch (IOException e) {
       // assume the stream has been closed (e.g. the process died)
@@ -289,7 +288,7 @@ public abstract class Launcher {
   /**
    * Drain all data from the input stream, and print said data to p.  Block if necessary.
    */
-  private void blockingDrainAndPrint(BufferedInputStream s, PrintStream p) throws IOException {
+  private static void blockingDrainAndPrint(BufferedInputStream s, PrintStream p) {
     ByteArrayOutputStream b = new ByteArrayOutputStream();
     try {
       // gather all the data from the stream.
@@ -310,7 +309,7 @@ public abstract class Launcher {
   /**
    * Drain some data from the input stream, and append said data to b.  Do not block.
    */
-  private void drainAndCatch(BufferedInputStream s, ByteArrayOutputStream b) throws IOException {
+  private static void drainAndCatch(BufferedInputStream s, ByteArrayOutputStream b) {
     try {
       while (s.available() > 0) {
         byte[] data = new byte[s.available()];
@@ -326,7 +325,7 @@ public abstract class Launcher {
   /**
    * Drain all data from the input stream, and append said data to p.  Block if necessary.
    */
-  private void blockingDrainAndCatch(BufferedInputStream s, ByteArrayOutputStream b) throws IOException {
+  private static void blockingDrainAndCatch(BufferedInputStream s, ByteArrayOutputStream b) {
     try {
       int next = s.read();
       while (next != -1) {

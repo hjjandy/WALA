@@ -57,7 +57,7 @@ import com.ibm.wala.util.strings.Atom;
 /**
  *  Manage SSA-Variables in synthetic methods.
  *
- *  @author  Tobias Blaschke <code@tobiasblaschke.de>
+ *  @author  Tobias Blaschke &lt;code@tobiasblaschke.de&gt;
  *  @since   2013-09-19
  */
 public class SSAValueManager {
@@ -109,7 +109,7 @@ public class SSAValueManager {
 
     /** The main data-structure of the management  */
     private Map<VariableKey, List<Managed<? extends SSAValue>>> seenTypes = HashMapFactory.make();
-    private List<SSAValue> unmanaged = new ArrayList<SSAValue>();
+    private List<SSAValue> unmanaged = new ArrayList<>();
    
     public SSAValueManager(ParameterAccessor acc) {
         this.nextLocal = acc.getFirstAfter();
@@ -176,12 +176,12 @@ public class SSAValueManager {
             throw new IllegalStateException("The parameter " + value + " using Key " + value.key + " has already been allocated");
         } else {
             info("New variable in management: {}", value);
-            final Managed<SSAValue> param = new Managed(value, value.key);
+            final Managed<SSAValue> param = new Managed<>(value, value.key);
             param.status = ValueStatus.ALLOCATED;
             param.setInScope = currentScope;
             param.setBy = setBy;
 
-            final List<Managed<? extends SSAValue>> aParam = new ArrayList<Managed<? extends SSAValue>>();
+            final List<Managed<? extends SSAValue>> aParam = new ArrayList<>();
             aParam.add(param);
 
             seenTypes.put(value.key, aParam);
@@ -191,11 +191,10 @@ public class SSAValueManager {
     /**
      *  Register a Phi-Instruction _after_ added to the model.
      *
-     *  @param  type    the type the Phi-Instruction sets
-     *  @param  ssaValue the number the SSA-Instruction assigns to
+     *  @param  value   the number the SSA-Instruction assigns to
      *  @param  setBy   the Phi-Instruction itself - may be null
      *  @throws IllegalArgumentException if you assign to a number requested using
-     *      {@link #getFree(TypeReference)} but types mismatch.
+     *      {@link #getFree} but types mismatch.
      *  @throws IllegalStateException if you forgot to close some Phis
      */
     public void setPhi(final SSAValue value, SSAInstruction setBy) {
@@ -276,7 +275,7 @@ public class SSAValueManager {
         }
 
         final SSAValue var = new SSAValue(nextLocal++, type, this.forMethod, key);
-        final Managed<SSAValue> param = new Managed(var, key);
+        final Managed<SSAValue> param = new Managed<>(var, key);
 
         param.status = ValueStatus.FREE;
         param.setInScope = currentScope;
@@ -284,7 +283,7 @@ public class SSAValueManager {
         if (seenTypes.containsKey(key)) {
             seenTypes.get(key).add(param);
         } else {
-            List<Managed<? extends SSAValue>> aParam = new ArrayList<Managed<? extends SSAValue>>();
+            List<Managed<? extends SSAValue>> aParam = new ArrayList<>();
             aParam.add(param);
 
             seenTypes.put(key, aParam);
@@ -321,7 +320,7 @@ public class SSAValueManager {
         }
 
         final SSAValue var = new SSAValue(nextLocal++, type, this.forMethod, key);
-        final Managed<SSAValue> param = new Managed(var, key);
+        final Managed<SSAValue> param = new Managed<>(var, key);
 
         param.status = ValueStatus.UNALLOCATED;
         param.setInScope = currentScope;
@@ -329,7 +328,7 @@ public class SSAValueManager {
         if (seenTypes.containsKey(key)) {
             seenTypes.get(key).add(param);
         } else {
-            List<Managed<? extends SSAValue>> aParam = new ArrayList<Managed<? extends SSAValue>>();
+            List<Managed<? extends SSAValue>> aParam = new ArrayList<>();
             aParam.add(param);
 
             seenTypes.put(key, aParam);
@@ -417,7 +416,7 @@ public class SSAValueManager {
             throw new IllegalArgumentException("The argument key may not be null");
         }
 
-        final SSAValue cand;;
+        final SSAValue cand;
         currentScope--;
         assert(currentScope >= 0 );
         cand = getCurrent(key);
@@ -437,7 +436,7 @@ public class SSAValueManager {
             throw new IllegalArgumentException("The argument key may not be null");
         }
 
-        List<SSAValue> ret = new ArrayList<SSAValue>();
+        List<SSAValue> ret = new ArrayList<>();
 
         if (seenTypes.containsKey(key)) {
             for (Managed<? extends SSAValue> param : seenTypes.get(key)) {
@@ -660,8 +659,8 @@ public class SSAValueManager {
      *  Collect the variable-names of all known variables.
      */
     public Map<Integer, Atom> makeLocalNames() {
-        final Map<Integer, Atom> names = new HashMap<Integer, Atom>();
-        final Map<VariableKey, Integer> suffix = new HashMap<VariableKey, Integer>();
+        final Map<Integer, Atom> names = new HashMap<>();
+        final Map<VariableKey, Integer> suffix = new HashMap<>();
         int currentSuffix = 0;
 
         for (final List<Managed<? extends SSAValue>> manageds : seenTypes.values()) {

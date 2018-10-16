@@ -42,10 +42,9 @@ package com.ibm.wala.demandpa.driver;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Iterator;
-
 import com.ibm.wala.analysis.typeInference.TypeAbstraction;
 import com.ibm.wala.analysis.typeInference.TypeInference;
+import com.ibm.wala.classLoader.Language;
 import com.ibm.wala.core.tests.callGraph.CallGraphTestUtil;
 import com.ibm.wala.core.tests.demandpa.TestInfo;
 import com.ibm.wala.demandpa.alg.DemandRefinementPointsTo;
@@ -58,7 +57,7 @@ import com.ibm.wala.demandpa.alg.statemachine.DummyStateMachine;
 import com.ibm.wala.demandpa.flowgraph.IFlowLabel;
 import com.ibm.wala.demandpa.util.MemoryAccessMap;
 import com.ibm.wala.demandpa.util.SimpleMemoryAccessMap;
-import com.ibm.wala.ipa.callgraph.AnalysisCache;
+import com.ibm.wala.ipa.callgraph.AnalysisCacheImpl;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.AnalysisScope;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -72,6 +71,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.SSAPropagationCallGraphBuilder;
 import com.ibm.wala.ipa.cha.ClassHierarchy;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
+import com.ibm.wala.ipa.cha.ClassHierarchyFactory;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.util.CancelException;
 
@@ -104,7 +104,7 @@ public class TestAgainstSimpleDriver {
     // build a type hierarchy
     ClassHierarchy cha = null;
     try {
-      cha = ClassHierarchy.make(scope);
+      cha = ClassHierarchyFactory.make(scope);
     } catch (ClassHierarchyException e) {
       // TODO Auto-generated catch block
       e.printStackTrace();
@@ -116,7 +116,7 @@ public class TestAgainstSimpleDriver {
     AnalysisOptions options = CallGraphTestUtil.makeAnalysisOptions(scope, entrypoints);
 
     // build an RTA call graph
-    CallGraphBuilder rtaBuilder = Util.makeRTABuilder(options, new AnalysisCache(), cha, scope);
+    CallGraphBuilder<InstanceKey> rtaBuilder = Util.makeRTABuilder(options, new AnalysisCacheImpl(), cha, scope);
     final CallGraph cg = rtaBuilder.makeCallGraph(options, null);
     // System.err.println(cg.toString());
 
@@ -155,15 +155,15 @@ public class TestAgainstSimpleDriver {
       if (result.isEmpty()) {
         System.err.println("  EMPTY!");
       }
-      for (Iterator<InstanceKey> it = result.iterator(); it.hasNext();) {
-        System.err.println("  " + it.next());
+      for (InstanceKey instanceKey : result) {
+        System.err.println("  " + instanceKey);
       }
     }
   }
 
   private static IDemandPointerAnalysis makeDemandPointerAnalysis(AnalysisOptions options, ClassHierarchy cha, AnalysisScope scope,
       CallGraph cg, MemoryAccessMap fam) {
-    SSAPropagationCallGraphBuilder builder = Util.makeVanillaZeroOneCFABuilder(options, new AnalysisCache(), cha, scope);
+    SSAPropagationCallGraphBuilder builder = Util.makeVanillaZeroOneCFABuilder(Language.JAVA, options, new AnalysisCacheImpl(), cha, scope);
     // return new TestNewGraphPointsTo(cg, builder, fam, cha, warnings);
     DemandRefinementPointsTo fullDemandPointsTo = DemandRefinementPointsTo.makeWithDefaultFlowGraph(cg, builder, fam, cha, options, new DummyStateMachine.Factory<IFlowLabel>());
     // fullDemandPointsTo.setCGRefinePolicy(new AlwaysRefineCGPolicy());

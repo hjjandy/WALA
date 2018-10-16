@@ -41,7 +41,7 @@ public class SyntheticMethod implements IMethod {
 
   protected final IMethod resolvedMethod;
 
-  protected final IClass declaringClass;
+  public final IClass declaringClass;
 
   private final boolean isStatic;
 
@@ -154,11 +154,19 @@ public class SyntheticMethod implements IMethod {
   }
 
   /**
+   * @see com.ibm.wala.classLoader.IMethod#isWalaSynthetic()
+   */
+  @Override
+  public boolean isWalaSynthetic() {
+    return true;
+  }
+
+  /**
    * @see com.ibm.wala.classLoader.IMethod#isSynthetic()
    */
   @Override
   public boolean isSynthetic() {
-    return true;
+    return false;
   }
 
   /**
@@ -175,7 +183,7 @@ public class SyntheticMethod implements IMethod {
    * NOTE: SIDE EFFECT!!! ... nulls out phi instructions in the instruction array!
    */
   public InducedCFG makeControlFlowGraph(SSAInstruction[] instructions) {
-    return new InducedCFG(instructions, this, Everywhere.EVERYWHERE);
+    return this.getDeclaringClass().getClassLoader().getLanguage().makeInducedCFG(instructions, this, Everywhere.EVERYWHERE);
   }
 
   public BytecodeStream getBytecodeStream() throws UnsupportedOperationException {
@@ -271,7 +279,7 @@ public class SyntheticMethod implements IMethod {
    * @param options options governing SSA construction
    */
   @Deprecated
-  public SSAInstruction[] getStatements(SSAOptions options) {
+  public SSAInstruction[] getStatements(@SuppressWarnings("unused") SSAOptions options) {
     return NO_STATEMENTS;
   }
 
@@ -337,6 +345,7 @@ public class SyntheticMethod implements IMethod {
   /*
    * @see com.ibm.wala.classLoader.IMethod#getSourcePosition(int)
    */
+  @Override
   public SourcePosition getSourcePosition(int bcIndex) throws InvalidClassFileException {
     return null;
   }
@@ -344,6 +353,7 @@ public class SyntheticMethod implements IMethod {
   /*
    * @see com.ibm.wala.classLoader.IMethod#getParameterSourcePosition(int)
    */
+  @Override
   public SourcePosition getParameterSourcePosition(int paramNum) throws InvalidClassFileException {
     return null;
   }

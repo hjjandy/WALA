@@ -45,15 +45,17 @@ public class PrunedCallGraph implements CallGraph {
     this.remove = remove;
   }
   
+	@Override
 	public void removeNodeAndEdges(CGNode n) throws UnsupportedOperationException {
 		cg.removeNodeAndEdges(n);
 		keep.remove(n);
 		remove.remove(n);
 	}
 
+	@Override
 	public Iterator<CGNode> iterator() {
 		Iterator<CGNode> tmp = cg.iterator();
-		Collection<CGNode> col = new LinkedList<CGNode>();
+		Collection<CGNode> col = new LinkedList<>();
 		while (tmp.hasNext()) {
 			CGNode n = tmp.next();
 			if (keep.contains(n)) {
@@ -64,21 +66,25 @@ public class PrunedCallGraph implements CallGraph {
 		return col.iterator();
 	}
 
+	@Override
 	public int getNumberOfNodes() {
 		return keep.size();
 	}
 
+	@Override
 	public void addNode(CGNode n) {
 		cg.addNode(n);
 		keep.add(n);
 	}
 
+	@Override
 	public void removeNode(CGNode n) throws UnsupportedOperationException {
 		cg.removeNode(n);
 		keep.remove(n);
     remove.remove(n);
 	}
 
+	@Override
 	public boolean containsNode(CGNode n) {
 		return cg.containsNode(n) && keep.contains(n);
 	}
@@ -87,9 +93,10 @@ public class PrunedCallGraph implements CallGraph {
 	  return remove.containsKey(src) && remove.get(src).contains(target);
 	}
 	
+	@Override
 	public Iterator<CGNode> getPredNodes(CGNode n) {
 		Iterator<CGNode> tmp = cg.getPredNodes(n);
-		Collection<CGNode> col = new LinkedList<CGNode>();
+		Collection<CGNode> col = new LinkedList<>();
 		while (tmp.hasNext()) {
 			CGNode no = tmp.next();
 			if (keep.contains(no) && !removedEdge(no, n)) {
@@ -100,6 +107,7 @@ public class PrunedCallGraph implements CallGraph {
 		return col.iterator();
 	}
 
+	@Override
 	public int getPredNodeCount(CGNode n) {
 		Iterator<CGNode> tmp = cg.getPredNodes(n);
 		int cnt = 0;
@@ -113,9 +121,10 @@ public class PrunedCallGraph implements CallGraph {
 	}
 
 
+	@Override
 	public Iterator<CGNode> getSuccNodes(CGNode n) {
 		Iterator<CGNode> tmp = cg.getSuccNodes(n);
-		Collection<CGNode> col = new LinkedList<CGNode>();
+		Collection<CGNode> col = new LinkedList<>();
 		while (tmp.hasNext()) {
 			CGNode no = tmp.next();
 			if (keep.contains(no) && !removedEdge(n, no)) {
@@ -127,6 +136,7 @@ public class PrunedCallGraph implements CallGraph {
 	}
 
 
+	@Override
 	public int getSuccNodeCount(CGNode n) {
 		Iterator<CGNode> tmp = cg.getSuccNodes(n);
 		int cnt = 0;
@@ -140,6 +150,7 @@ public class PrunedCallGraph implements CallGraph {
 	}
 
 
+	@Override
 	public void addEdge(CGNode src, CGNode dst) {
 		if (keep.contains(src) && keep.contains(dst)){
 			cg.addEdge(src, dst);
@@ -147,31 +158,37 @@ public class PrunedCallGraph implements CallGraph {
 	}
 
 
+	@Override
 	public void removeEdge(CGNode src, CGNode dst) throws UnsupportedOperationException {
 		cg.removeEdge(src, dst);
 	}
 
 
+	@Override
 	public void removeAllIncidentEdges(CGNode node) throws UnsupportedOperationException {
 		cg.removeAllIncidentEdges(node);
 	}
 
 
+	@Override
 	public void removeIncomingEdges(CGNode node) throws UnsupportedOperationException {
 		cg.removeIncomingEdges(node);
 	}
 
 
+	@Override
 	public void removeOutgoingEdges(CGNode node) throws UnsupportedOperationException {
 		cg.removeOutgoingEdges(node);
 	}
 
 
+	@Override
 	public boolean hasEdge(CGNode src, CGNode dst) {
 		return cg.hasEdge(src, dst) && keep.contains(src) &&  keep.contains(dst) && !removedEdge(src, dst);
 	}
 
 
+	@Override
 	public int getNumber(CGNode N) {
 		if (keep.contains(N)) {
 			return cg.getNumber(N);
@@ -182,6 +199,7 @@ public class PrunedCallGraph implements CallGraph {
 	}
 
 
+	@Override
 	public CGNode getNode(int number) {
 		if(keep.contains(cg.getNode(number))) {
 			return cg.getNode(number);
@@ -191,14 +209,16 @@ public class PrunedCallGraph implements CallGraph {
 	}
 
 
+	@Override
 	public int getMaxNumber() {
 		return cg.getMaxNumber();
 	}
 
 
+	@Override
 	public Iterator<CGNode> iterateNodes(IntSet s) {
 		Iterator<CGNode> tmp = cg.iterateNodes(s);
-		Collection<CGNode> col = new LinkedList<CGNode>();
+		Collection<CGNode> col = new LinkedList<>();
 		while (tmp.hasNext()) {
 			CGNode n = tmp.next();
 			if (keep.contains(n)) {
@@ -210,6 +230,7 @@ public class PrunedCallGraph implements CallGraph {
 	}
 
 
+	@Override
 	public IntSet getSuccNodeNumbers(CGNode node) {
 		if (!keep.contains(node)){
 			return null;
@@ -225,6 +246,7 @@ public class PrunedCallGraph implements CallGraph {
 	}
 
 
+	@Override
 	public IntSet getPredNodeNumbers(CGNode node) {
 		if (!keep.contains(node)){
 			return null;
@@ -243,6 +265,7 @@ public class PrunedCallGraph implements CallGraph {
 	}
 
 
+	@Override
 	public CGNode getFakeRootNode() {
 		if (keep.contains(cg.getFakeRootNode())) {
 			return cg.getFakeRootNode();
@@ -251,6 +274,7 @@ public class PrunedCallGraph implements CallGraph {
 		}
 	}
 
+	@Override
 	 public CGNode getFakeWorldClinitNode() {
 	    if (keep.contains(cg.getFakeWorldClinitNode())) {
 	      return cg.getFakeRootNode();
@@ -260,9 +284,10 @@ public class PrunedCallGraph implements CallGraph {
 	  }
 
 
+	@Override
 	public Collection<CGNode> getEntrypointNodes() {
 		Collection<CGNode> tmp = cg.getEntrypointNodes();
-		Set<CGNode> ret = new HashSet<CGNode>();
+		Set<CGNode> ret = new HashSet<>();
 		for (CGNode n : tmp) {
 			if (keep.contains(n)) {
 				ret.add(n);
@@ -272,6 +297,7 @@ public class PrunedCallGraph implements CallGraph {
 	}
 
 
+	@Override
 	public CGNode getNode(IMethod method, Context C) {
 		if(keep.contains(cg.getNode(method, C))) {
 			return cg.getNode(method, C);
@@ -281,9 +307,10 @@ public class PrunedCallGraph implements CallGraph {
 	}
 
 
+	@Override
 	public Set<CGNode> getNodes(MethodReference m) {
 		Set<CGNode> tmp = cg.getNodes(m);
-		Set<CGNode> ret = new HashSet<CGNode>();
+		Set<CGNode> ret = new HashSet<>();
 		for (CGNode n : tmp) {
 			if (keep.contains(n)) {
 				ret.add(n);
@@ -293,17 +320,19 @@ public class PrunedCallGraph implements CallGraph {
 	}
 
 
+	@Override
 	public IClassHierarchy getClassHierarchy() {
 		return cg.getClassHierarchy();
 	}
 
 
+	@Override
 	public Set<CGNode> getPossibleTargets(CGNode node, CallSiteReference site) {
 		if (!keep.contains(node)){
 			return null;
 		}
 		Set<CGNode> tmp = cg.getPossibleTargets(node, site);
-		Set<CGNode> ret = new HashSet<CGNode>();
+		Set<CGNode> ret = new HashSet<>();
 		for (CGNode n : tmp) {
 			if (keep.contains(n) && !removedEdge(node, n)) {
 				ret.add(n);
@@ -313,6 +342,7 @@ public class PrunedCallGraph implements CallGraph {
 	}
 
 
+	@Override
 	public int getNumberOfTargets(CGNode node, CallSiteReference site) {
 		if (!keep.contains(node)){
 			return -1;
@@ -321,6 +351,7 @@ public class PrunedCallGraph implements CallGraph {
 	}
 
 
+	@Override
 	public Iterator<CallSiteReference> getPossibleSites(CGNode src,	CGNode target) {
 		if (!(keep.contains(src) && keep.contains(target)) || removedEdge(src, target)){
 			return null;

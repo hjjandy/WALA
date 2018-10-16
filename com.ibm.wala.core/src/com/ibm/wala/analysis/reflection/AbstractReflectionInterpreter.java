@@ -27,8 +27,8 @@ import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.classLoader.SyntheticMethod;
-import com.ibm.wala.ipa.callgraph.AnalysisCache;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
+import com.ibm.wala.ipa.callgraph.IAnalysisCacheView;
 import com.ibm.wala.ipa.callgraph.propagation.SSAContextInterpreter;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.shrikeBT.IInvokeInstruction;
@@ -65,13 +65,13 @@ public abstract class AbstractReflectionInterpreter implements SSAContextInterpr
   /**
    * cache of analysis information
    */
-  protected AnalysisCache cache;
+  protected IAnalysisCacheView cache;
 
 
   protected int getLocalForType(TypeReference T) {
     Integer I = typeIndexMap.get(T);
     if (I == null) {
-      typeIndexMap.put(T, I = new Integer(indexLocal += 2));
+      typeIndexMap.put(T, I = Integer.valueOf(indexLocal += 2));
     }
     return I.intValue();
   }
@@ -176,17 +176,17 @@ public abstract class AbstractReflectionInterpreter implements SSAContextInterpr
     /**
      * List of synthetic allocation statements we model for this specialized instance
      */
-    final protected ArrayList<SSAInstruction> allocations = new ArrayList<SSAInstruction>();
+    final protected ArrayList<SSAInstruction> allocations = new ArrayList<>();
 
     /**
      * List of synthetic invoke instructions we model for this specialized instance.
      */
-    final protected ArrayList<SSAInstruction> calls = new ArrayList<SSAInstruction>();
+    final protected ArrayList<SSAInstruction> calls = new ArrayList<>();
 
     /**
      * List of all instructions
      */
-    protected final ArrayList<SSAInstruction> allInstructions = new ArrayList<SSAInstruction>();
+    protected final ArrayList<SSAInstruction> allInstructions = new ArrayList<>();
 
     private final SSAInstructionFactory insts = declaringClass.getClassLoader().getInstructionFactory();
     

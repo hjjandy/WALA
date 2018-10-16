@@ -11,8 +11,7 @@
 package com.ibm.wala.util.graph.impl;
 
 import java.io.Serializable;
-import java.util.Iterator;
-
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.graph.AbstractNumberedGraph;
 import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.graph.NumberedEdgeManager;
@@ -24,7 +23,9 @@ import com.ibm.wala.util.intset.BasicNaturalRelation;
  */
 public class SlowSparseNumberedGraph<T> extends AbstractNumberedGraph<T> implements Serializable {
 
-  private final SlowNumberedNodeManager<T> nodeManager = new SlowNumberedNodeManager<T>();
+  private static final long serialVersionUID = 7014361126159594838L;
+
+  private final SlowNumberedNodeManager<T> nodeManager = new SlowNumberedNodeManager<>();
 
   private final SparseNumberedEdgeManager<T> edgeManager;
 
@@ -39,7 +40,7 @@ public class SlowSparseNumberedGraph<T> extends AbstractNumberedGraph<T> impleme
    * @param normalOutCount what is the "normal" number of out edges for a node?
    */
   public SlowSparseNumberedGraph(int normalOutCount) {
-    edgeManager = new SparseNumberedEdgeManager<T>(nodeManager, normalOutCount, BasicNaturalRelation.TWO_LEVEL);
+    edgeManager = new SparseNumberedEdgeManager<>(nodeManager, normalOutCount, BasicNaturalRelation.TWO_LEVEL);
   }
 
   /*
@@ -71,18 +72,17 @@ public class SlowSparseNumberedGraph<T> extends AbstractNumberedGraph<T> impleme
     if (g == null) {
       throw new IllegalArgumentException("g is null");
     }
-    for (Iterator<? extends T> it = g.iterator(); it.hasNext();) {
-      into.addNode(it.next());
+    for (T name : g) {
+      into.addNode(name);
     }
-    for (Iterator<? extends T> it = g.iterator(); it.hasNext();) {
-      T n = it.next();
-      for (Iterator<? extends T> it2 = g.getSuccNodes(n); it2.hasNext();) {
-        into.addEdge(n, it2.next());
+    for (T n : g) {
+      for (T succ : Iterator2Iterable.make(g.getSuccNodes(n))) {
+        into.addEdge(n, succ);
       }
     }
   }
 
   public static <T> SlowSparseNumberedGraph<T> make() {
-    return new SlowSparseNumberedGraph<T>();
+    return new SlowSparseNumberedGraph<>();
   }
 }

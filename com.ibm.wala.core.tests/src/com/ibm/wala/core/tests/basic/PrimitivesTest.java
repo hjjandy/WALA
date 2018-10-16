@@ -12,7 +12,6 @@ package com.ibm.wala.core.tests.basic;
 
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +22,7 @@ import com.ibm.wala.core.tests.util.WalaTestCase;
 import com.ibm.wala.util.collections.BimodalMap;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Iterator2Collection;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.collections.SmallMap;
 import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.graph.NumberedGraph;
@@ -64,7 +64,7 @@ public class PrimitivesTest extends WalaTestCase {
   /**
    * Test the MutableSparseIntSet implementation
    */
-  private void doMutableIntSet(MutableIntSetFactory factory) {
+  private static void doMutableIntSet(MutableIntSetFactory<?> factory) {
     MutableIntSet v = factory.parse("{9,17}");
     MutableIntSet w = factory.make(new int[] {});
     MutableIntSet x = factory.make(new int[] { 7, 4, 2, 4, 2, 2 });
@@ -351,7 +351,7 @@ public class PrimitivesTest extends WalaTestCase {
   /**
    * Test the MutableSparseIntSet implementation
    */
-  private void doMutableLongSet(MutableLongSetFactory factory) {
+  private static void doMutableLongSet(MutableLongSetFactory factory) {
     MutableLongSet v = factory.parse("{9,17}");
     MutableLongSet w = factory.make(new long[] {});
     MutableLongSet x = factory.make(new long[] { 7, 4, 2, 4, 2, 2 });
@@ -600,47 +600,47 @@ public class PrimitivesTest extends WalaTestCase {
   }
 
   @Test public void testSmallMap() {
-    SmallMap<Integer, Integer> M = new SmallMap<Integer, Integer>();
-    Integer I1 = new Integer(1);
-    Integer I2 = new Integer(2);
-    Integer I3 = new Integer(3);
+    SmallMap<Integer, Integer> M = new SmallMap<>();
+    Integer I1 = Integer.valueOf(1);
+    Integer I2 = Integer.valueOf(2);
+    Integer I3 = Integer.valueOf(3);
     M.put(I1, I1);
     M.put(I2, I2);
     M.put(I3, I3);
 
-    Integer I = M.get(new Integer(2));
+    Integer I = M.get(Integer.valueOf(2));
     Assert.assertTrue(I != null);
     Assert.assertTrue(I.equals(I2));
 
-    I = M.get(new Integer(4));
+    I = M.get(Integer.valueOf(4));
     Assert.assertTrue(I == null);
 
-    I = M.put(new Integer(2), new Integer(3));
+    I = M.put(Integer.valueOf(2), Integer.valueOf(3));
     Assert.assertTrue(I.equals(I2));
     I = M.get(I2);
     Assert.assertTrue(I.equals(I3));
   }
 
   @Test public void testBimodalMap() {
-    Map<Integer, Integer> M = new BimodalMap<Integer, Integer>(3);
-    Integer I1 = new Integer(1);
-    Integer I2 = new Integer(2);
-    Integer I3 = new Integer(3);
-    Integer I4 = new Integer(4);
-    Integer I5 = new Integer(5);
-    Integer I6 = new Integer(6);
+    Map<Integer, Integer> M = new BimodalMap<>(3);
+    Integer I1 = Integer.valueOf(1);
+    Integer I2 = Integer.valueOf(2);
+    Integer I3 = Integer.valueOf(3);
+    Integer I4 = Integer.valueOf(4);
+    Integer I5 = Integer.valueOf(5);
+    Integer I6 = Integer.valueOf(6);
     M.put(I1, I1);
     M.put(I2, I2);
     M.put(I3, I3);
 
-    Integer I = M.get(new Integer(2));
+    Integer I = M.get(Integer.valueOf(2));
     Assert.assertTrue(I != null);
     Assert.assertTrue(I.equals(I2));
 
-    I = M.get(new Integer(4));
+    I = M.get(Integer.valueOf(4));
     Assert.assertTrue(I == null);
 
-    I = M.put(new Integer(2), new Integer(3));
+    I = M.put(Integer.valueOf(2), Integer.valueOf(3));
     Assert.assertTrue(I.equals(I2));
     I = M.get(I2);
     Assert.assertTrue(I.equals(I3));
@@ -648,14 +648,14 @@ public class PrimitivesTest extends WalaTestCase {
     M.put(I4, I4);
     M.put(I5, I5);
     M.put(I6, I6);
-    I = M.get(new Integer(4));
+    I = M.get(Integer.valueOf(4));
     Assert.assertTrue(I != null);
     Assert.assertTrue(I.equals(I4));
 
-    I = M.get(new Integer(7));
+    I = M.get(Integer.valueOf(7));
     Assert.assertTrue(I == null);
 
-    I = M.put(new Integer(2), new Integer(6));
+    I = M.put(Integer.valueOf(2), Integer.valueOf(6));
     Assert.assertTrue(I.equals(I3));
     I = M.get(I2);
     Assert.assertTrue(I.equals(I6));
@@ -665,7 +665,7 @@ public class PrimitivesTest extends WalaTestCase {
     NumberedGraph<Integer> G = makeBFSTestGraph();
 
     // path from 0 to 8
-    BFSPathFinder<Integer> pf = new BFSPathFinder<Integer>(G, G.getNode(0), G.getNode(8));
+    BFSPathFinder<Integer> pf = new BFSPathFinder<>(G, G.getNode(0), G.getNode(8));
     List<Integer> p = pf.find();
 
     // path should be 8, 6, 4, 2, 0
@@ -678,43 +678,43 @@ public class PrimitivesTest extends WalaTestCase {
   @Test public void testBoundedBFS() {
     NumberedGraph<Integer> G = makeBFSTestGraph();
 
-    BoundedBFSIterator<Integer> bfs = new BoundedBFSIterator<Integer>(G, G.getNode(0), 0);
+    BoundedBFSIterator<Integer> bfs = new BoundedBFSIterator<>(G, G.getNode(0), 0);
     Collection<Integer> c = Iterator2Collection.toSet(bfs);
     Assert.assertTrue(c.size() == 1);
 
-    bfs = new BoundedBFSIterator<Integer>(G, G.getNode(0), 1);
+    bfs = new BoundedBFSIterator<>(G, G.getNode(0), 1);
     c = Iterator2Collection.toSet(bfs);
     Assert.assertTrue(c.size() == 3);
 
-    bfs = new BoundedBFSIterator<Integer>(G, G.getNode(0), 2);
+    bfs = new BoundedBFSIterator<>(G, G.getNode(0), 2);
     c = Iterator2Collection.toSet(bfs);
     Assert.assertTrue(c.size() == 5);
 
-    bfs = new BoundedBFSIterator<Integer>(G, G.getNode(0), 3);
+    bfs = new BoundedBFSIterator<>(G, G.getNode(0), 3);
     c = Iterator2Collection.toSet(bfs);
     Assert.assertTrue(c.size() == 7);
 
-    bfs = new BoundedBFSIterator<Integer>(G, G.getNode(0), 4);
+    bfs = new BoundedBFSIterator<>(G, G.getNode(0), 4);
     c = Iterator2Collection.toSet(bfs);
     Assert.assertTrue(c.size() == 9);
 
-    bfs = new BoundedBFSIterator<Integer>(G, G.getNode(0), 5);
+    bfs = new BoundedBFSIterator<>(G, G.getNode(0), 5);
     c = Iterator2Collection.toSet(bfs);
     Assert.assertTrue(c.size() == 10);
 
-    bfs = new BoundedBFSIterator<Integer>(G, G.getNode(0), 500);
+    bfs = new BoundedBFSIterator<>(G, G.getNode(0), 500);
     c = Iterator2Collection.toSet(bfs);
     Assert.assertTrue(c.size() == 10);
   }
 
-  private NumberedGraph<Integer> makeBFSTestGraph() {
+  private static NumberedGraph<Integer> makeBFSTestGraph() {
     // test graph
     NumberedGraph<Integer> G = SlowSparseNumberedGraph.make();
 
     // add 10 nodes
     Integer[] nodes = new Integer[10];
     for (int i = 0; i < nodes.length; i++)
-      G.addNode(nodes[i] = new Integer(i));
+      G.addNode(nodes[i] = Integer.valueOf(i));
 
     // edges to i-1, i+1, i+2
     for (int i = 0; i < nodes.length; i++) {
@@ -738,7 +738,7 @@ public class PrimitivesTest extends WalaTestCase {
     // add nodes
     Object[] nodes = new Object[11];
     for (int i = 0; i < nodes.length; i++)
-      G.addNode(nodes[i] = new Integer(i));
+      G.addNode(nodes[i] = Integer.valueOf(i));
 
     // add edges
     G.addEdge(nodes[10], nodes[0]);
@@ -761,13 +761,12 @@ public class PrimitivesTest extends WalaTestCase {
     // Assert.assertions
     int i = 0;
     Object[] desired4 = new Object[] { nodes[4], nodes[7], nodes[8], nodes[5], nodes[10] };
-    for (Iterator<Object> d4 = D.dominators(nodes[4]); d4.hasNext();)
-      Assert.assertTrue(d4.next() == desired4[i++]);
+    for (Object d4 : Iterator2Iterable.make(D.dominators(nodes[4])))
+      Assert.assertTrue(d4 == desired4[i++]);
 
     int j = 0;
     Object[] desired5 = new Object[] { nodes[8] };
-    for (Iterator<? extends Object> t4 = D.dominatorTree().getSuccNodes(nodes[5]); t4.hasNext();) {
-      Object o4 = t4.next();
+    for (Object o4 : Iterator2Iterable.make(D.dominatorTree().getSuccNodes(nodes[5]))) {
       Object d = desired5[j++];
       boolean ok = (o4.equals(d));
       if (!ok) {
@@ -790,8 +789,8 @@ public class PrimitivesTest extends WalaTestCase {
     R.add(3, 11);
     R.add(5, 1);
     int count = 0;
-    for (Iterator<IntPair> it = R.iterator(); it.hasNext();) {
-      System.err.println(it.next());
+    for (IntPair intPair : R) {
+      System.err.println(intPair);
       count++;
     }
     Assert.assertTrue(count == 5);
@@ -859,10 +858,10 @@ public class PrimitivesTest extends WalaTestCase {
     Assert.assertTrue("Got count " + count, count == 2);
   }
 
-  private int countEquivalenceClasses(IntegerUnionFind uf) {
+  private static int countEquivalenceClasses(IntegerUnionFind uf) {
     HashSet<Integer> s = HashSetFactory.make();
     for (int i = 0; i < uf.size(); i++) {
-      s.add(new Integer(uf.find(i)));
+      s.add(Integer.valueOf(uf.find(i)));
     }
     return s.size();
   }
@@ -891,7 +890,7 @@ public class PrimitivesTest extends WalaTestCase {
     testSingleBitVector(new OffsetBitVector(100, 10));
   }
 
-  private void testSingleBitVector(BitVectorBase bv) {
+  private static void testSingleBitVector(BitVectorBase<?> bv) {
     // does the following not automatically scale the bitvector to
     // a reasonable size?
     bv.set(55);
@@ -959,8 +958,7 @@ public class PrimitivesTest extends WalaTestCase {
     testBitVectors(new OffsetBitVector(35, 20), new OffsetBitVector(25, 10));
   }
 
-  @SuppressWarnings("unchecked")
-  private <T extends BitVectorBase> void testBitVectors(T v1, T v2) {
+  private static <T extends BitVectorBase<T>> void testBitVectors(T v1, T v2) {
     v1.set(100);
     v1.set(101);
     v1.set(102);

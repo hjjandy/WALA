@@ -4,6 +4,7 @@
 #include <list>
 #include "jni.h"
 #include "Exceptions.h"
+#include "launch.h"
 
 using namespace std;
 
@@ -53,6 +54,7 @@ private:
   jclass CAstInterface;
   jclass CAstPrinter;
   jclass CAstSymbol;
+  jclass CAstType;
   jclass NativeEntity;
   jclass NativeClassEntity;
   jclass NativeCodeEntity;
@@ -103,6 +105,9 @@ private:
   jmethodID codeSetLabelledGotoTarget;
   jobject callReference;
 
+  static bool initialized;
+  static void initialize(JNIEnv *java_env);
+  
 public:
 
 #define _INCLUDE_CONSTANTS 
@@ -121,6 +126,8 @@ public:
 
   CAstWrapper(JNIEnv *env, Exceptions &ex, jobject Ast);
 
+  virtual ~CAstWrapper() { }
+  
   void assertIsCAstNode(jobject, int);
 
   jobject makeNode(int);

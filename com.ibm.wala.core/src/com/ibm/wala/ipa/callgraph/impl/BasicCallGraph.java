@@ -17,11 +17,14 @@ import java.util.Map;
 import java.util.Set;
 
 import com.ibm.wala.analysis.reflection.JavaTypeContext;
+import com.ibm.wala.analysis.typeInference.TypeAbstraction;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.Context;
+import com.ibm.wala.ipa.callgraph.ContextKey;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.ReceiverInstanceContext;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.shrikeBT.IInvokeInstruction;
@@ -29,6 +32,7 @@ import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.collections.NonNullSingletonIterator;
 import com.ibm.wala.util.debug.Assertions;
 import com.ibm.wala.util.debug.UnimplementedError;
@@ -45,7 +49,7 @@ public abstract class BasicCallGraph<T> extends AbstractNumberedGraph<CGNode> im
 
   private static final boolean DEBUG = false;
 
-  private final DelegatingNumberedNodeManager<CGNode> nodeManager = new DelegatingNumberedNodeManager<CGNode>();
+  private final DelegatingNumberedNodeManager<CGNode> nodeManager = new DelegatingNumberedNodeManager<>();
 
   /**
    * A fake root node for the graph
@@ -136,8 +140,8 @@ public abstract class BasicCallGraph<T> extends AbstractNumberedGraph<CGNode> im
     return result;
   }
 
-  protected NodeImpl getNode(Key K) {
-    return (NodeImpl) nodes.get(K);
+  protected CGNode getNode(Key K) {
+    return nodes.get(K);
   }
 
   @Override
@@ -145,6 +149,7 @@ public abstract class BasicCallGraph<T> extends AbstractNumberedGraph<CGNode> im
     return fakeRoot;
   }
 
+  @Override
   public CGNode getFakeWorldClinitNode() {
     return fakeWorldClinit;
   }
@@ -182,7 +187,7 @@ public abstract class BasicCallGraph<T> extends AbstractNumberedGraph<CGNode> im
     protected NodeImpl(IMethod method, Context C) {
       this.method = method;
       this.context = C;
-      if (method != null && !method.isSynthetic() && method.isAbstract()) {
+      if (method != null && !method.isWalaSynthetic() && method.isAbstract()) {
         assert !method.isAbstract() : "Abstract method " + method;
       }
       assert C != null;
@@ -230,20 +235,22 @@ public abstract class BasicCallGraph<T> extends AbstractNumberedGraph<CGNode> im
   @Override
   public String toString() {
     StringBuffer result = new StringBuffer("");
-    for (Iterator i = DFS.iterateDiscoverTime(this, new NonNullSingletonIterator<CGNode>(getFakeRootNode())); i.hasNext();) {
-      CGNode n = (CGNode) i.next();
-      result.append(n + "\n");
-      if (n.getMethod() != null) {
-        for (Iterator sites = n.iterateCallSites(); sites.hasNext();) {
-          CallSiteReference site = (CallSiteReference) sites.next();
-          Iterator targets = getPossibleTargets(n, site).iterator();
-          if (targets.hasNext()) {
-            result.append(" - " + site + "\n");
-          }
-          for (; targets.hasNext();) {
-            CGNode target = (CGNode) targets.next();
-            result.append("     -> " + target + "\n");
-          }
+    for (CGNode n : Iterator2Iterable.make(DFS.iterateDiscoverTime(this, new NonNullSingletonIterator<>(getFakeRootNode())))) {
+      result.append(nodeToString(this, n) + "\n");
+    }
+    return result.toString();
+  }
+
+  public static String nodeToString(CallGraph CG, CGNode n) {
+    StringBuffer result = new StringBuffer(n.toString() +  "\n");
+     if (n.getMethod() != null) {
+      for (CallSiteReference site : Iterator2Iterable.make(n.iterateCallSites())) {
+        Iterator<CGNode> targets = CG.getPossibleTargets(n, site).iterator();
+        if (targets.hasNext()) {
+          result.append(" - " + site + "\n");
+        }
+        for (CGNode target : Iterator2Iterable.make(targets)) {
+          result.append("     -> " + target + "\n");
         }
       }
     }
@@ -298,10 +305,10 @@ public abstract class BasicCallGraph<T> extends AbstractNumberedGraph<CGNode> im
   @Override
   public Set<CGNode> getNodes(MethodReference m) {
     IMethod im = getClassHierarchy().resolveMethod(m);
-    if (im == null) {
-      return Collections.emptySet();
+    if (im != null) {
+      m = im.getReference();
     }
-    Set<CGNode> result = mr2Nodes.get(im.getReference());
+    Set<CGNode> result = mr2Nodes.get(m);
     Set<CGNode> empty = Collections.emptySet();
     return (result == null) ? empty : result;
   }
@@ -365,10 +372,10 @@ public abstract class BasicCallGraph<T> extends AbstractNumberedGraph<CGNode> im
    for(CGNode n : this) { 
      String nm = n.getMethod().getDeclaringClass().getName().toString() + "/" + n.getMethod().getName() + "/" + n.getContext().getClass().toString();
   
-     if (n.getContext() instanceof ReceiverInstanceContext) {
-       nm = nm + "/" + ((ReceiverInstanceContext)n.getContext()).getReceiver().getConcreteType().getName();
+     if (n.getContext().isA(ReceiverInstanceContext.class)) {
+       nm = nm + "/" + ((InstanceKey)n.getContext().get(ContextKey.RECEIVER)).getConcreteType().getName();
      } else if (n.getContext() instanceof JavaTypeContext) {
-       nm = nm + "/" + ((JavaTypeContext)n.getContext()).getType().getTypeReference().getName();
+       nm = nm + "/" + ((TypeAbstraction)n.getContext().get(ContextKey.RECEIVER)).getTypeReference().getName();
      }
      
      do {

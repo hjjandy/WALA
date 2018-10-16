@@ -10,14 +10,13 @@
  *******************************************************************************/
 package com.ibm.wala.cast.ipa.callgraph;
 
-import java.util.Iterator;
-
 import com.ibm.wala.cast.ipa.callgraph.AstSSAPropagationCallGraphBuilder.AstPointerAnalysisImpl.AstImplicitPointsToSetVisitor;
 import com.ibm.wala.cast.util.TargetLanguageSelector;
-import com.ibm.wala.ipa.callgraph.AnalysisCache;
+import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
+import com.ibm.wala.ipa.callgraph.IAnalysisCacheView;
 import com.ibm.wala.ipa.callgraph.impl.AbstractRootMethod;
 import com.ibm.wala.ipa.callgraph.impl.ExplicitCallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -28,7 +27,6 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKeyFactory;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToMap;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationSystem;
-import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.util.intset.MutableMapping;
 import com.ibm.wala.util.strings.Atom;
 
@@ -47,16 +45,16 @@ public abstract class CrossLanguageSSAPropagationCallGraphBuilder extends AstSSA
 
   protected abstract TargetLanguageSelector<AbstractRootMethod, CrossLanguageCallGraph> makeRootNodeSelector();
 
-  protected CrossLanguageSSAPropagationCallGraphBuilder(IClassHierarchy cha, AnalysisOptions options, AnalysisCache cache,
+  protected CrossLanguageSSAPropagationCallGraphBuilder(IMethod fakeRootClass, AnalysisOptions options, IAnalysisCacheView cache,
       PointerKeyFactory pointerKeyFactory) {
-    super(cha, options, cache, pointerKeyFactory);
+    super(fakeRootClass, options, cache, pointerKeyFactory);
     visitors = makeMainVisitorSelector();
     interesting = makeInterestingVisitorSelector();
   }
 
   @Override
-  protected ExplicitCallGraph createEmptyCallGraph(IClassHierarchy cha, AnalysisOptions options) {
-    return new CrossLanguageCallGraph(makeRootNodeSelector(), cha, options, getAnalysisCache());
+  protected ExplicitCallGraph createEmptyCallGraph(IMethod fakeRootClass, AnalysisOptions options) {
+    return new CrossLanguageCallGraph(makeRootNodeSelector(), fakeRootClass, options, getAnalysisCache());
   }
 
   protected static Atom getLanguage(CGNode node) {
@@ -65,7 +63,7 @@ public abstract class CrossLanguageSSAPropagationCallGraphBuilder extends AstSSA
 
   @Override
   protected InterestingVisitor makeInterestingVisitor(CGNode node, int vn) {
-    return interesting.get(getLanguage(node), new Integer(vn));
+    return interesting.get(getLanguage(node), Integer.valueOf(vn));
   }
 
   @Override
@@ -103,8 +101,8 @@ public abstract class CrossLanguageSSAPropagationCallGraphBuilder extends AstSSA
 
   @Override
   protected void customInit() {
-    for (Iterator roots = ((CrossLanguageCallGraph) callGraph).getLanguageRoots(); roots.hasNext();) {
-      markDiscovered((CGNode) roots.next());
+    for (CGNode root : callGraph) {
+      markDiscovered(root);
     }
   }
 

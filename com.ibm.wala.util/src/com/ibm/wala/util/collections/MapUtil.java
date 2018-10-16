@@ -12,7 +12,6 @@ package com.ibm.wala.util.collections;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -26,7 +25,7 @@ import com.ibm.wala.util.intset.MutableSparseIntSet;
  */
 public class MapUtil {
   /**
-   * @param M a mapping from Object -> Set
+   * @param M a mapping from Object -&gt; Set
    * @param key
    * @return the Set corresponding to key in M; create one if needed
    * @throws IllegalArgumentException if M is null
@@ -90,14 +89,14 @@ public class MapUtil {
     }
     List<T> result = M.get(key);
     if (result == null) {
-      result = new ArrayList<T>();
+      result = new ArrayList<>();
       M.put(key, result);
     }
     return result;
   }
 
   /**
-   * @param M a mapping from Object -> Map
+   * @param M a mapping from Object -&gt; Map
    * @param key
    * @return the Map corresponding to key in M; create one if needed
    * @throws IllegalArgumentException if M is null
@@ -133,7 +132,7 @@ public class MapUtil {
   }
 
   /**
-   * @param M a mapping from Object -> WeakHashMap
+   * @param M a mapping from Object -&gt; WeakHashMap
    * @param key
    * @return the WeakHashMap corresponding to key in M; create one if needed
    * @throws IllegalArgumentException if M is null
@@ -146,15 +145,15 @@ public class MapUtil {
     }
     WeakHashMap<K, V> result = M.get(key);
     if (result == null) {
-      result = new WeakHashMap<K, V>(2);
+      result = new WeakHashMap<>(2);
       M.put(key, result);
     }
     return result;
   }
 
   /**
-   * @param m a map from key -> Set <value>
-   * @return inverted map, value -> Set <key>
+   * @param m a map from key -&gt; {@link Set}&lt;value&gt;
+   * @return inverted map, value -&gt; {@link Set}&lt;key&gt;
    * @throws IllegalArgumentException if m is null
    */
   public static <K, V> Map<V, Set<K>> inverseMap(Map<K, Set<V>> m) {
@@ -162,12 +161,10 @@ public class MapUtil {
       throw new IllegalArgumentException("m is null");
     }
     Map<V, Set<K>> result = HashMapFactory.make(m.size());
-    for (Iterator<Map.Entry<K, Set<V>>> it = m.entrySet().iterator(); it.hasNext();) {
-      Map.Entry<K, Set<V>> E = it.next();
+    for (Map.Entry<K, Set<V>> E : m.entrySet()) {
       K key = E.getKey();
       Set<V> values = E.getValue();
-      for (Iterator<V> it2 = values.iterator(); it2.hasNext();) {
-        V v = it2.next();
+      for (V v : values) {
         Set<K> s = findOrCreateSet(result, v);
         s.add(key);
       }
@@ -203,14 +200,12 @@ public class MapUtil {
     }
     Map<Set<K>, V> result = HashMapFactory.make();
     Map<V, Set<K>> valueToKeys = HashMapFactory.make();
-    for (Iterator<Map.Entry<K, V>> it = m.entrySet().iterator(); it.hasNext();) {
-      Map.Entry<K, V> E = it.next();
+    for (Map.Entry<K, V> E : m.entrySet()) {
       K key = E.getKey();
       V value = E.getValue();
       findOrCreateSet(valueToKeys, value).add(key);
     }
-    for (Iterator<Map.Entry<V, Set<K>>> it = valueToKeys.entrySet().iterator(); it.hasNext();) {
-      Map.Entry<V, Set<K>> E = it.next();
+    for (Map.Entry<V, Set<K>> E : valueToKeys.entrySet()) {
       V value = E.getKey();
       Set<K> keys = E.getValue();
       result.put(keys, value);

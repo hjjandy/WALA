@@ -25,7 +25,6 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.CompoundIterator;
 import com.ibm.wala.util.collections.EmptyIterator;
-import com.ibm.wala.util.Predicate;
 import com.ibm.wala.util.collections.FilterIterator;
 import com.ibm.wala.util.collections.NonNullSingletonIterator;
 import com.ibm.wala.util.collections.Pair;
@@ -89,8 +88,6 @@ abstract public class ScopeMappingInstanceKeys implements InstanceKeyFactory {
      * get the CGNode representing the lexical parent of {@link #creator} with
      * name definer
      * 
-     * @param definer
-     * @return
      */
     public Iterator<CGNode> getFunargNodes(Pair<String, String> name) {
       Collection<CGNode> constructorCallers = getConstructorCallers(this, name);
@@ -98,12 +95,12 @@ abstract public class ScopeMappingInstanceKeys implements InstanceKeyFactory {
       Iterator<CGNode> result = EmptyIterator.instance();
       for (CGNode callerOfConstructor : constructorCallers) {
         if (callerOfConstructor.getMethod().getReference().getDeclaringClass().getName().toString().equals(name.snd)) {
-          result = new CompoundIterator<CGNode>(result, new NonNullSingletonIterator<CGNode>(callerOfConstructor));
+          result = new CompoundIterator<>(result, new NonNullSingletonIterator<>(callerOfConstructor));
         } else {
           PointerKey funcKey = builder.getPointerKeyForLocal(callerOfConstructor, 1);
           for (InstanceKey funcPtr : builder.getPointerAnalysis().getPointsToSet(funcKey)) {
             if (funcPtr instanceof ScopeMappingInstanceKey) {
-              result = new CompoundIterator<CGNode>(result, ((ScopeMappingInstanceKey) funcPtr).getFunargNodes(name));
+              result = new CompoundIterator<>(result, ((ScopeMappingInstanceKey) funcPtr).getFunargNodes(name));
             }
           }
         }
@@ -138,13 +135,9 @@ abstract public class ScopeMappingInstanceKeys implements InstanceKeyFactory {
 
     @Override
     public Iterator<Pair<CGNode, NewSiteReference>> getCreationSites(CallGraph CG) {
-      return new FilterIterator<Pair<CGNode, NewSiteReference>>(
+      return new FilterIterator<>(
           base.getCreationSites(CG),
-          new Predicate<Pair<CGNode, NewSiteReference>>() {
-            @Override public boolean test(Pair<CGNode, NewSiteReference> o) {
-              return o.fst.equals(creator);
-            }
-          });
+          o -> o.fst.equals(creator));
     }
   }
 

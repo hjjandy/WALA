@@ -55,6 +55,11 @@ public interface IClass extends IClassHierarchyDweller {
   boolean isPrivate();
 
   /**
+   * @return true iff this class is synthetic, i.e., compiler-generated
+   */
+  boolean isSynthetic();
+
+  /**
    * Return the integer that encodes the class's modifiers, as defined by the JVM specification
    * 
    * @return the integer that encodes the class's modifiers, as defined by the JVM specification
@@ -135,7 +140,7 @@ public interface IClass extends IClassHierarchyDweller {
   /**
    * @return an Iterator of the IMethods declared by this class.
    */
-  Collection<IMethod> getDeclaredMethods();
+  Collection<? extends IMethod> getDeclaredMethods();
 
   /**
    * Compute the instance fields declared by this class or any of its superclasses.
@@ -155,7 +160,7 @@ public interface IClass extends IClassHierarchyDweller {
   /**
    * Compute the methods declared by this class or any of its superclasses.
    */
-  Collection<IMethod> getAllMethods();
+  Collection<? extends IMethod> getAllMethods();
 
   /**
    * Compute the instance fields declared by this class.

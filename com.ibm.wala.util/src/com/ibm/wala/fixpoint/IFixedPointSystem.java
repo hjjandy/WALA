@@ -12,11 +12,12 @@ package com.ibm.wala.fixpoint;
 
 import java.util.Iterator;
 
+import com.ibm.wala.util.graph.INodeWithNumber;
+
 /**
  * Represents a set of {@link IFixedPointStatement}s to be solved by a {@link IFixedPointSolver}
  */
-@SuppressWarnings("rawtypes")
-public interface IFixedPointSystem<T extends IVariable> {
+public interface IFixedPointSystem<T extends IVariable<T>> {
 
   /**
    * removes a given statement
@@ -31,16 +32,16 @@ public interface IFixedPointSystem<T extends IVariable> {
   /**
    * Return an Iterator of the {@link IFixedPointStatement}s in this system
    * 
-   * @return Iterator <Constraint>
+   * @return {@link Iterator}&lt;Constraint&gt;
    */
-  public Iterator getStatements();
+  public Iterator<? extends INodeWithNumber> getStatements();
 
   /**
    * Return an Iterator of the variables in this graph
    * 
-   * @return Iterator <IVariable>
+   * @return {@link Iterator}&lt;{@link IVariable}&gt;
    */
-  public Iterator getVariables();
+  public Iterator<? extends INodeWithNumber> getVariables();
 
   /**
    * @return true iff this system already contains an equation that is equal() to s
@@ -53,14 +54,14 @@ public interface IFixedPointSystem<T extends IVariable> {
   boolean containsVariable(T v);
 
   /**
-   * @return Iterator <statement>, the statements that use the variable
+   * @return {@link Iterator}&lt;statement&gt;, the statements that use the variable
    */
-  Iterator getStatementsThatUse(T v);
+  Iterator<? extends INodeWithNumber> getStatementsThatUse(T v);
 
   /**
-   * @return Iterator <statement>, the statements that def the variable
+   * @return {@link Iterator}&lt;statement&gt;, the statements that def the variable
    */
-  Iterator getStatementsThatDef(T v);
+  Iterator<? extends INodeWithNumber> getStatementsThatDef(T v);
 
   int getNumberOfStatementsThatUse(T v);
 

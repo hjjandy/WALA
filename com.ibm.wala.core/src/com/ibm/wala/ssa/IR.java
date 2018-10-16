@@ -26,6 +26,7 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.CompoundIterator;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.debug.Assertions;
 import com.ibm.wala.util.intset.BasicNaturalRelation;
 import com.ibm.wala.util.intset.IntIterator;
@@ -42,7 +43,7 @@ import com.ibm.wala.util.strings.StringStuff;
  * 
  * See http://wala.sourceforge.net/wiki/index.php/UserGuide:IR for more details on the IR API.
  */
-public abstract class IR {
+public abstract class IR implements IRView {
 
   /**
    * The method that defined this IR's bytecodes
@@ -124,10 +125,10 @@ public abstract class IR {
           callSiteMapping.add(((SSAAbstractInvokeInstruction) x).getCallSite().getProgramCounter(), i);
         }
         if (x instanceof SSANewInstruction) {
-          newSiteMapping.put(((SSANewInstruction) x).getNewSite(), new Integer(i));
+          newSiteMapping.put(((SSANewInstruction) x).getNewSite(), Integer.valueOf(i));
         }
         if (x.isPEI()) {
-           peiMapping.put(new ProgramCounter(cfg.getProgramCounter(i)), new Integer(i));
+           peiMapping.put(new ProgramCounter(cfg.getProgramCounter(i)), Integer.valueOf(i));
         }
       }
     }
@@ -154,11 +155,20 @@ public abstract class IR {
       int end = bb.getLastInstructionIndex();
       result.append("BB").append(bb.getNumber());
       if (bb instanceof ExceptionHandlerBasicBlock) {
-        result.append("<Handler>");
+
+        result.append("<Handler> (");
+        Iterator<TypeReference> catchIter = ((ExceptionHandlerBasicBlock) bb).getCaughtExceptionTypes();
+        while (catchIter.hasNext()) {
+          TypeReference next = catchIter.next();
+          result.append(next);
+          if (catchIter.hasNext()) {
+            result.append(",");
+          }
+        }
+        result.append(")");
       }
       result.append("\n");
-      for (Iterator it = bb.iteratePhis(); it.hasNext();) {
-        SSAPhiInstruction phi = (SSAPhiInstruction) it.next();
+      for (SSAPhiInstruction phi : Iterator2Iterable.make(bb.iteratePhis())) {
         if (phi != null) {
           result.append("           " + phi.toString(symbolTable)).append("\n");
         }
@@ -201,7 +211,11 @@ public abstract class IR {
             addNames(j, valNames, valNum);
           }
           if (!valNames.isEmpty()) {
-            result.append(" ").append(valNames);
+            result.append(" [");
+            for(Map.Entry<Integer,Set<String>> e : valNames.entrySet()) {
+              result.append(e.getKey() + "=" + e.getValue());
+            }
+            result.append("]");
           }
  
           result.append("\n");
@@ -220,8 +234,7 @@ public abstract class IR {
           }
         }
       }
-      for (Iterator it = bb.iteratePis(); it.hasNext();) {
-        SSAPiInstruction pi = (SSAPiInstruction) it.next();
+      for (SSAPiInstruction pi : Iterator2Iterable.make(bb.iteratePis())) {
         if (pi != null) {
           result.append("           " + pi.toString(symbolTable)).append("\n");
         }
@@ -248,6 +261,7 @@ public abstract class IR {
    * 
    * This may go away someday.
    */
+  @Override
   public SSAInstruction[] getInstructions() {
     return instructions;
   }
@@ -255,6 +269,7 @@ public abstract class IR {
   /**
    * @return the {@link SymbolTable} managing attributes for values in this method
    */
+  @Override
   public SymbolTable getSymbolTable() {
     return symbolTable;
   }
@@ -262,8 +277,14 @@ public abstract class IR {
   /**
    * @return the underlying {@link ControlFlowGraph} which defines this IR.
    */
+  @Override
   public SSACFG getControlFlowGraph() {
     return cfg;
+  }
+
+  @Override
+  public Iterator<ISSABasicBlock> getBlocks() {
+    return getControlFlowGraph().iterator();
   }
 
   /**
@@ -378,6 +399,7 @@ public abstract class IR {
   /**
    * @return the method this IR represents
    */
+  @Override
   public IMethod getMethod() {
     return method;
   }
@@ -440,18 +462,18 @@ public abstract class IR {
   /**
    * visit each normal (non-phi, non-pi, non-catch) instruction in this IR
    */
-  public void visitNormalInstructions(SSAInstruction.Visitor v) {
-    for (Iterator i = iterateNormalInstructions(); i.hasNext();) {
-      ((SSAInstruction) i.next()).visit(v);
+  public void visitNormalInstructions(SSAInstruction.IVisitor v) {
+    for (SSAInstruction inst : Iterator2Iterable.make(iterateNormalInstructions())) {
+      inst.visit(v);
     }
   }
 
   /**
    * visit each instruction in this IR
    */
-  public void visitAllInstructions(SSAInstruction.Visitor v) {
-    for (Iterator i = iterateAllInstructions(); i.hasNext();) {
-      ((SSAInstruction) i.next()).visit(v);
+  public void visitAllInstructions(SSAInstruction.IVisitor v) {
+    for (SSAInstruction inst : Iterator2Iterable.make(iterateAllInstructions())) {
+      inst.visit(v);
     }
   }
 
@@ -503,13 +525,14 @@ public abstract class IR {
    * @return an {@link Iterator} of all instructions (Normal, Phi, and Catch)
    */
   public Iterator<SSAInstruction> iterateAllInstructions() {
-    return new CompoundIterator<SSAInstruction>(iterateNormalInstructions(), new CompoundIterator<SSAInstruction>(
-        iterateCatchInstructions(), new CompoundIterator<SSAInstruction>(iteratePhis(), iteratePis())));
+    return new CompoundIterator<>(iterateNormalInstructions(), new CompoundIterator<>(
+        iterateCatchInstructions(), new CompoundIterator<>(iteratePhis(), iteratePis())));
   }
 
   /**
    * @return the exit basic block
    */
+  @Override
   public BasicBlock getExitBlock() {
     return cfg.exit();
   }
@@ -570,6 +593,7 @@ public abstract class IR {
    * @param pc a program counter
    * @return the instruction (a PEI) at this program counter
    */
+  @Override
   public SSAInstruction getPEI(ProgramCounter pc) {
     Integer i = peiMapping.get(pc);
     return instructions[i.intValue()];
@@ -578,6 +602,7 @@ public abstract class IR {
   /**
    * @return an {@link Iterator} of all the allocation sites ( {@link NewSiteReference}s ) in this IR
    */
+  @Override
   public Iterator<NewSiteReference> iterateNewSites() {
     return newSiteMapping.keySet().iterator();
   }
@@ -585,6 +610,7 @@ public abstract class IR {
   /**
    * @return an {@link Iterator} of all the call sites ( {@link CallSiteReference}s ) in this IR
    */
+  @Override
   public Iterator<CallSiteReference> iterateCallSites() {
     return new Iterator<CallSiteReference>() {
       private final int limit = callSiteMapping.maxKeyValue();
@@ -624,6 +650,7 @@ public abstract class IR {
    * @return the basic block corresponding to this instruction
    * @throws IllegalArgumentException if site is null
    */
+  @Override
   public ISSABasicBlock[] getBasicBlocksForCall(final CallSiteReference site) {
     if (site == null) {
       throw new IllegalArgumentException("site is null");
@@ -671,8 +698,8 @@ public abstract class IR {
     if (instructions == null)
       return true;
 
-    for (int i = 0; i < instructions.length; i++)
-      if (instructions[i] != null)
+    for (SSAInstruction instruction : instructions)
+      if (instruction != null)
         return false;
 
     return true;
@@ -684,6 +711,7 @@ public abstract class IR {
    * @return if we know that immediately after the given program counter, v_vn corresponds to one or more locals and local variable
    *         names are available, the name of the locals which v_vn represents. Otherwise, null.
    */
+  @Override
   public String[] getLocalNames(int index, int vn) {
     if (getLocalMap() == null) {
       return new String[0];
@@ -722,5 +750,5 @@ public abstract class IR {
    */
   public SSAOptions getOptions() {
     return options;
-  };
+  }
 }

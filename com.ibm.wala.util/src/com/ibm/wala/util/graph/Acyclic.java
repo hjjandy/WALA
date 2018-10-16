@@ -17,6 +17,7 @@ import java.util.Set;
 import java.util.Stack;
 
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.intset.BasicNaturalRelation;
 import com.ibm.wala.util.intset.IBinaryNaturalRelation;
 import com.ibm.wala.util.intset.IntIterator;
@@ -73,8 +74,7 @@ public class Acyclic {
   private static <T> void dfs(BasicNaturalRelation result, T root, NumberedGraph<T> G, Set<T> visited, Set<T> onstack) {
     visited.add(root);
     onstack.add(root);
-    for (Iterator<? extends T> it = G.getSuccNodes(root); it.hasNext();) {
-      T dstNode = it.next();
+    for (T dstNode : Iterator2Iterable.make(G.getSuccNodes(root))) {
       if (onstack.contains(dstNode)) {
         int src = G.getNumber(root);
         int dst = G.getNumber(dstNode);
@@ -88,10 +88,10 @@ public class Acyclic {
   }
 
   private static <T> void dfsNonRecursive(final BasicNaturalRelation result, final T root, final NumberedGraph<T> G) {
-    final Stack<T> stack = new Stack<T>();
-    final Set<T> stackSet = new HashSet<T>();
-    final Stack<Iterator<? extends T>> stackIt = new Stack<Iterator<? extends T>>();
-    final Set<T> finished = new HashSet<T>();
+    final Stack<T> stack = new Stack<>();
+    final Set<T> stackSet = new HashSet<>();
+    final Stack<Iterator<? extends T>> stackIt = new Stack<>();
+    final Set<T> finished = new HashSet<>();
     stack.push(root);
     stackSet.add(root);
     stackIt.push(G.getSuccNodes(root));
@@ -154,7 +154,7 @@ public class Acyclic {
    */
   public static <T> Collection<Path> computeAcyclicPaths(NumberedGraph<T> G, T root, T src, T sink, int max) {
     Collection<Path> result = HashSetFactory.make();
-    EdgeFilteredNumberedGraph<T> acyclic = new EdgeFilteredNumberedGraph<T>(G, computeBackEdges(G, root));
+    EdgeFilteredNumberedGraph<T> acyclic = new EdgeFilteredNumberedGraph<>(G, computeBackEdges(G, root));
 
     Collection<Path> worklist = HashSetFactory.make();
     Path sinkPath = Path.make(G.getNumber(sink));

@@ -39,19 +39,19 @@ public class Statistics {
 
   public static void main(String[] args) throws Exception {
     for (int i = 0; i < 1; i++) {
-      instrumenter = new OfflineInstrumenter(true);
+      instrumenter = new OfflineInstrumenter();
 
-      Writer w = new BufferedWriter(new FileWriter("report", false));
+      try (Writer w = new BufferedWriter(new FileWriter("report", false))) {
 
-      args = instrumenter.parseStandardArgs(args);
+        args = instrumenter.parseStandardArgs(args);
 
-      instrumenter.beginTraversal();
-      ClassInstrumenter ci;
-      while ((ci = instrumenter.nextClass()) != null) {
-        doClass(ci, w);
+        instrumenter.beginTraversal();
+        ClassInstrumenter ci;
+        while ((ci = instrumenter.nextClass()) != null) {
+          doClass(ci, w);
+        }
+        instrumenter.close();
       }
-      instrumenter.close();
-      w.close();
     }
   }
 
@@ -79,9 +79,9 @@ public class Statistics {
 
         int constructorCalls = 0;
         IInstruction[] instrs = d.getInstructions();
-        for (int i = 0; i < instrs.length; i++) {
-          if (instrs[i] instanceof InvokeInstruction) {
-            InvokeInstruction invoke = (InvokeInstruction) instrs[i];
+        for (IInstruction instr : instrs) {
+          if (instr instanceof InvokeInstruction) {
+            InvokeInstruction invoke = (InvokeInstruction) instr;
             if (invoke.getMethodName().equals("<init>") && invoke.getClassType().equals(Util.makeType(className))) {
               constructorCalls++;
             }

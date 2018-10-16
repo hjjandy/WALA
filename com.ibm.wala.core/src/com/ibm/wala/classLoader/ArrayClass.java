@@ -343,7 +343,7 @@ public class ArrayClass implements IClass, Constants {
    * @see com.ibm.wala.classLoader.IClass#getAllMethods()
    */
   @Override
-  public Collection<IMethod> getAllMethods() {
+  public Collection<? extends IMethod> getAllMethods() {
     return loader.lookupClass(getClassLoader().getLanguage().getRootType().getName()).getAllMethods();
   }
 
@@ -368,6 +368,11 @@ public class ArrayClass implements IClass, Constants {
   
   @Override
   public boolean isPrivate() {
+    return false;
+  }
+
+  @Override
+  public boolean isSynthetic() {
     return false;
   }
 

@@ -24,7 +24,9 @@ import com.ibm.wala.fixpoint.UnaryStatement;
 import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.MonitorUtil;
 import com.ibm.wala.util.MonitorUtil.IProgressMonitor;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.debug.VerboseAction;
+import com.ibm.wala.util.graph.INodeWithNumber;
 
 /**
  * Represents a set of {@link IFixedPointStatement}s to be solved by a {@link IFixedPointSolver}
@@ -37,7 +39,7 @@ import com.ibm.wala.util.debug.VerboseAction;
  * Fixed-point iteration proceeds in a topological order according to these edges.
  */
 @SuppressWarnings("rawtypes")
-public abstract class AbstractFixedPointSolver<T extends IVariable<?>> implements IFixedPointSolver<T>, FixedPointConstants,
+public abstract class AbstractFixedPointSolver<T extends IVariable<T>> implements IFixedPointSolver<T>, FixedPointConstants,
     VerboseAction {
 
   static final boolean DEBUG = false;
@@ -148,8 +150,8 @@ public abstract class AbstractFixedPointSolver<T extends IVariable<?>> implement
         System.err.println(("Before evaluation " + s));
       }
       byte code = s.evaluate();
+      nEvaluated++;
       if (verbose) {
-        nEvaluated++;
         if (nEvaluated % getVerboseInterval() == 0) {
           performVerboseAction();
         }
@@ -215,13 +217,13 @@ public abstract class AbstractFixedPointSolver<T extends IVariable<?>> implement
   @Override
   public String toString() {
     StringBuffer result = new StringBuffer("Fixed Point System:\n");
-    for (Iterator it = getStatements(); it.hasNext();) {
-      result.append(it.next()).append("\n");
+    for (INodeWithNumber nwn : Iterator2Iterable.make(getStatements())) {
+      result.append(nwn).append("\n");
     }
     return result.toString();
   }
 
-  public Iterator getStatements() {
+  public Iterator<? extends INodeWithNumber> getStatements() {
     return getFixedPointSystem().getStatements();
   }
 
@@ -238,8 +240,8 @@ public abstract class AbstractFixedPointSolver<T extends IVariable<?>> implement
    * Add all to the work list.
    */
   public void addAllStatementsToWorkList() {
-    for (Iterator i = getStatements(); i.hasNext();) {
-      AbstractStatement eq = (AbstractStatement) i.next();
+    for (INodeWithNumber nwn : Iterator2Iterable.make(getStatements())) {
+      AbstractStatement eq = (AbstractStatement) nwn;
       addToWorkList(eq);
     }
   }
@@ -251,8 +253,8 @@ public abstract class AbstractFixedPointSolver<T extends IVariable<?>> implement
    * @param v the variable that has changed
    */
   public void changedVariable(T v) {
-    for (Iterator it = getFixedPointSystem().getStatementsThatUse(v); it.hasNext();) {
-      AbstractStatement s = (AbstractStatement) it.next();
+    for (INodeWithNumber nwn : Iterator2Iterable.make(getFixedPointSystem().getStatementsThatUse(v))) {
+      AbstractStatement s = (AbstractStatement) nwn;
       addToWorkList(s);
     }
   }
@@ -273,7 +275,7 @@ public abstract class AbstractFixedPointSolver<T extends IVariable<?>> implement
     }
     // add to the list of graph
     lhs.setOrderNumber(nextOrderNumber++);
-    final NullaryStatement<T> s = new BasicNullaryStatement<T>(lhs, operator);
+    final NullaryStatement<T> s = new BasicNullaryStatement<>(lhs, operator);
     if (getFixedPointSystem().containsStatement(s)) {
       return false;
     }
@@ -505,7 +507,7 @@ public abstract class AbstractFixedPointSolver<T extends IVariable<?>> implement
    */
   private void reorder() {
     // drain the worklist
-    LinkedList<AbstractStatement> temp = new LinkedList<AbstractStatement>();
+    LinkedList<AbstractStatement> temp = new LinkedList<>();
     while (!workList.isEmpty()) {
       AbstractStatement eq = workList.takeStatement();
       temp.add(eq);
@@ -516,8 +518,7 @@ public abstract class AbstractFixedPointSolver<T extends IVariable<?>> implement
     getFixedPointSystem().reorder();
 
     // re-populate worklist
-    for (Iterator<AbstractStatement> it = temp.iterator(); it.hasNext();) {
-      AbstractStatement s = it.next();
+    for (AbstractStatement s : temp) {
       workList.insertStatement(s);
     }
   }

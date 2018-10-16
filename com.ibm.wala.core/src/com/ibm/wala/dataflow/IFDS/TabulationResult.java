@@ -15,7 +15,7 @@ import java.util.Collection;
 import com.ibm.wala.util.intset.IntSet;
 
 /**
- * The solution of a tabulation problem: a mapping from supergraph node -> bit vector representing the dataflow facts that hold at
+ * The solution of a tabulation problem: a mapping from supergraph node -&gt; bit vector representing the dataflow facts that hold at
  * the entry to the supergraph node.
  * 
  * @param <T> type of node in the supergraph
@@ -45,7 +45,7 @@ public interface TabulationResult<T, P, F> {
    * @param n1
    * @param d1
    * @param n2
-   * @return set of d2 s.t. (n1,d1) -> (n2,d2) is recorded as a summary edge, or null if none found
+   * @return set of d2 s.t. (n1,d1) -&gt; (n2,d2) is recorded as a summary edge, or null if none found
    */
   public IntSet getSummaryTargets(T n1, int d1, T n2);
 

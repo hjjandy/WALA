@@ -35,6 +35,7 @@ import com.ibm.wala.util.collections.EmptyIterator;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Iterator2Collection;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.collections.IteratorUtil;
 import com.ibm.wala.util.debug.Assertions;
 import com.ibm.wala.util.graph.AbstractNumberedGraph;
@@ -83,7 +84,7 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
   /**
    * keeps track of PDG for each call graph node
    */
-  private final Map<CGNode, PDG> pdgMap = HashMapFactory.make();
+  private final Map<CGNode, PDG<T>> pdgMap = HashMapFactory.make();
 
   /**
    * governs data dependence edges in the graph
@@ -115,7 +116,7 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
    */
   private final HeapExclusions heapExclude;
 
-  private final ModRef modRef;
+  private final ModRef<T> modRef;
 
   /**
    * Have we eagerly populated all nodes of this SDG?
@@ -123,15 +124,15 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
   private boolean eagerComputed = false;
 
   public SDG(final CallGraph cg, PointerAnalysis<T> pa, DataDependenceOptions dOptions, ControlDependenceOptions cOptions) {
-    this(cg, pa, ModRef.make(), dOptions, cOptions, null);
+    this(cg, pa, new ModRef<T>(), dOptions, cOptions, null);
   }
 
-  public SDG(final CallGraph cg, PointerAnalysis<T> pa, ModRef modRef, DataDependenceOptions dOptions,
+  public SDG(final CallGraph cg, PointerAnalysis<T> pa, ModRef<T> modRef, DataDependenceOptions dOptions,
       ControlDependenceOptions cOptions) {
     this(cg, pa, modRef, dOptions, cOptions, null);
   }
 
-  public SDG(CallGraph cg, PointerAnalysis<T> pa, ModRef modRef, DataDependenceOptions dOptions, ControlDependenceOptions cOptions,
+  public SDG(CallGraph cg, PointerAnalysis<T> pa, ModRef<T> modRef, DataDependenceOptions dOptions, ControlDependenceOptions cOptions,
       HeapExclusions heapExclude) throws IllegalArgumentException {
     super();
     if (dOptions == null) {
@@ -179,9 +180,9 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
   private void addPDGStatementNodes(CGNode node) {
     if (!statementsAdded.contains(node)) {
       statementsAdded.add(node);
-      PDG pdg = getPDG(node);
-      for (Iterator<? extends Statement> it = pdg.iterator(); it.hasNext();) {
-        addNode(it.next());
+      PDG<?> pdg = getPDG(node);
+      for (Statement statement : pdg) {
+        addNode(statement);
       }
     }
   }
@@ -190,14 +191,13 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
    * force computation of all PDGs in the SDG
    */
   private void computeAllPDGs() {
-    for (Iterator<? extends CGNode> it = cg.iterator(); it.hasNext();) {
-      CGNode n = it.next();
+    for (CGNode n : cg) {
       getPDG(n);
     }
   }
 
   /**
-   * iterate over the nodes <bf>without</bf> constructing any new ones. Use with extreme care. May break graph traversals that
+   * iterate over the nodes <b>without</b> constructing any new ones. Use with extreme care. May break graph traversals that
    * lazily add more nodes.
    */
   @Override
@@ -206,6 +206,8 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
   }
 
   private class Nodes extends SlowNumberedNodeManager<Statement> {
+
+    private static final long serialVersionUID = -1450214776332091211L;
 
     @Override
     public boolean containsNode(Statement N) {
@@ -258,7 +260,7 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
     }
 
     /**
-     * iterate over the nodes <bf>without</bf> constructing any new ones. Use with extreme care. May break graph traversals that
+     * iterate over the nodes <b>without</b> constructing any new ones. Use with extreme care. May break graph traversals that
      * lazily add more nodes.
      */
     Iterator<? extends Statement> iterateLazyNodes() {
@@ -370,19 +372,19 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
           }
 
           // data dependence predecessors
-          for (Iterator<? extends CGNode> it = cg.getPredNodes(N.getNode()); it.hasNext();) {
-            CGNode caller = it.next();
-            for (Iterator<CallSiteReference> it2 = cg.getPossibleSites(caller, N.getNode()); it2.hasNext();) {
-              CallSiteReference site = it2.next();
+          for (CGNode caller : Iterator2Iterable.make(cg.getPredNodes(N.getNode()))) {
+            for (CallSiteReference site : Iterator2Iterable.make(cg.getPossibleSites(caller, N.getNode()))) {
               IR ir = caller.getIR();
               IntSet indices = ir.getCallInstructionIndices(site);
               for (IntIterator ii = indices.intIterator(); ii.hasNext();) {
                 int i = ii.next();
                 SSAAbstractInvokeInstruction call = (SSAAbstractInvokeInstruction) ir.getInstructions()[i];
-                int p = call.getUse(parameterIndex);
-                Statement s = new ParamCaller(caller, i, p);
-                addNode(s);
-                result.add(s);
+                if (call.getNumberOfUses() > parameterIndex) {
+                  int p = call.getUse(parameterIndex);
+                  Statement s = new ParamCaller(caller, i, p);
+                  addNode(s);
+                  result.add(s);
+                }
               }
             }
           }
@@ -399,10 +401,8 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
         Collection<Statement> result = HashSetFactory.make(5);
         if (!dOptions.equals(DataDependenceOptions.NONE)) {
           // data dependence predecessors
-          for (Iterator<? extends CGNode> it = cg.getPredNodes(N.getNode()); it.hasNext();) {
-            CGNode caller = it.next();
-            for (Iterator<CallSiteReference> it2 = cg.getPossibleSites(caller, N.getNode()); it2.hasNext();) {
-              CallSiteReference site = it2.next();
+          for (CGNode caller : Iterator2Iterable.make(cg.getPredNodes(N.getNode()))) {
+            for (CallSiteReference site : Iterator2Iterable.make(cg.getPossibleSites(caller, N.getNode()))) {
               IR ir = caller.getIR();
               IntSet indices = ir.getCallInstructionIndices(site);
               for (IntIterator ii = indices.intIterator(); ii.hasNext();) {
@@ -423,11 +423,9 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
       }
       case METHOD_ENTRY:
         Collection<Statement> result = HashSetFactory.make(5);
-        if (!cOptions.equals(ControlDependenceOptions.NONE)) {
-          for (Iterator<? extends CGNode> it = cg.getPredNodes(N.getNode()); it.hasNext();) {
-            CGNode caller = it.next();
-            for (Iterator<CallSiteReference> it2 = cg.getPossibleSites(caller, N.getNode()); it2.hasNext();) {
-              CallSiteReference site = it2.next();
+        if (!cOptions.isIgnoreInterproc()) {
+          for (CGNode caller : Iterator2Iterable.make(cg.getPredNodes(N.getNode()))) {
+            for (CallSiteReference site : Iterator2Iterable.make(cg.getPossibleSites(caller, N.getNode()))) {
               IR ir = caller.getIR();
               IntSet indices = ir.getCallInstructionIndices(site);
               for (IntIterator ii = indices.intIterator(); ii.hasNext();) {
@@ -459,7 +457,7 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
       addPDGStatementNodes(N.getNode());
       switch (N.getKind()) {
       case NORMAL:
-        if (cOptions.equals(ControlDependenceOptions.NONE)) {
+        if (cOptions.isIgnoreInterproc()) {
           return getPDG(N.getNode()).getSuccNodes(N);
         } else {
           NormalStatement ns = (NormalStatement) N;
@@ -471,7 +469,7 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
               addNode(s);
               result.add(s);
             }
-            return new CompoundIterator<Statement>(result.iterator(), getPDG(N.getNode()).getSuccNodes(N));
+            return new CompoundIterator<>(result.iterator(), getPDG(N.getNode()).getSuccNodes(N));
           } else {
             return getPDG(N.getNode()).getSuccNodes(N);
           }
@@ -491,10 +489,8 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
         Collection<Statement> result = HashSetFactory.make(5);
         if (!dOptions.equals(DataDependenceOptions.NONE)) {
           // data dependence predecessors
-          for (Iterator<? extends CGNode> it = cg.getPredNodes(N.getNode()); it.hasNext();) {
-            CGNode caller = it.next();
-            for (Iterator<CallSiteReference> it2 = cg.getPossibleSites(caller, N.getNode()); it2.hasNext();) {
-              CallSiteReference site = it2.next();
+          for (CGNode caller : Iterator2Iterable.make(cg.getPredNodes(N.getNode()))) {
+            for (CallSiteReference site : Iterator2Iterable.make(cg.getPossibleSites(caller, N.getNode()))) {
               IR ir = caller.getIR();
               IntSet indices = ir.getCallInstructionIndices(site);
               for (IntIterator ii = indices.intIterator(); ii.hasNext();) {
@@ -512,10 +508,8 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
         Collection<Statement> result = HashSetFactory.make(5);
         if (!dOptions.equals(DataDependenceOptions.NONE)) {
           // data dependence predecessors
-          for (Iterator<? extends CGNode> it = cg.getPredNodes(N.getNode()); it.hasNext();) {
-            CGNode caller = it.next();
-            for (Iterator<CallSiteReference> it2 = cg.getPossibleSites(caller, N.getNode()); it2.hasNext();) {
-              CallSiteReference site = it2.next();
+          for (CGNode caller : Iterator2Iterable.make(cg.getPredNodes(N.getNode()))) {
+            for (CallSiteReference site : Iterator2Iterable.make(cg.getPossibleSites(caller, N.getNode()))) {
               IR ir = caller.getIR();
               IntSet indices = ir.getCallInstructionIndices(site);
               for (IntIterator ii = indices.intIterator(); ii.hasNext();) {
@@ -534,10 +528,8 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
         Collection<Statement> result = HashSetFactory.make(5);
         if (!dOptions.equals(DataDependenceOptions.NONE)) {
           // data dependence predecessors
-          for (Iterator<? extends CGNode> it = cg.getPredNodes(N.getNode()); it.hasNext();) {
-            CGNode caller = it.next();
-            for (Iterator<CallSiteReference> it2 = cg.getPossibleSites(caller, N.getNode()); it2.hasNext();) {
-              CallSiteReference site = it2.next();
+          for (CGNode caller : Iterator2Iterable.make(cg.getPredNodes(N.getNode()))) {
+            for (CallSiteReference site : Iterator2Iterable.make(cg.getPossibleSites(caller, N.getNode()))) {
               IR ir = caller.getIR();
               IntSet indices = ir.getCallInstructionIndices(site);
               for (IntIterator ii = indices.intIterator(); ii.hasNext();) {
@@ -554,11 +546,15 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
       case PARAM_CALLER: {
         ParamCaller pac = (ParamCaller) N;
         SSAAbstractInvokeInstruction call = pac.getInstruction();
+        int numParamsPassed = call.getNumberOfUses();
         Collection<Statement> result = HashSetFactory.make(5);
         if (!dOptions.equals(DataDependenceOptions.NONE)) {
           // data dependence successors
           for (CGNode t : cg.getPossibleTargets(N.getNode(), call.getCallSite())) {
-            for (int i = 0; i < t.getMethod().getNumberOfParameters(); i++) {
+            // in some languages (*cough* JavaScript *cough*) you can pass
+            // fewer parameters than the number of formals.  So, only loop
+            // over the parameters actually being passed here
+            for (int i = 0; i < t.getMethod().getNumberOfParameters() && i < numParamsPassed; i++) {
               if (dOptions.isTerminateAtCast() && call.isDispatch() && pac.getValueNumber() == call.getReceiver()) {
                 // a virtual dispatch is just like a cast.
                 continue;
@@ -620,7 +616,7 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
       addPDGStatementNodes(dst.getNode());
       switch (src.getKind()) {
       case NORMAL:
-        if (cOptions.equals(ControlDependenceOptions.NONE)) {
+        if (cOptions.isIgnoreInterproc()) {
           return getPDG(src.getNode()).hasEdge(src, dst);
         } else {
           NormalStatement ns = (NormalStatement) src;
@@ -700,7 +696,7 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
             // don't track reflection into reflective invokes
             return false;
           }
-          for (int i = 0; i < call.getNumberOfParameters(); i++) {
+          for (int i = 0; i < call.getNumberOfPositionalParameters(); i++) {
             if (call.getUse(i) == caller.getValueNumber()) {
               if (callee.getValueNumber() == i + 1) {
                 return true;
@@ -759,8 +755,7 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
     public IntSet getPredNodeNumbers(Statement node) {
       // TODO: optimize me.
       MutableSparseIntSet result = MutableSparseIntSet.makeEmpty();
-      for (Iterator<? extends Statement> it = getPredNodes(node); it.hasNext();) {
-        Statement s = it.next();
+      for (Statement s : Iterator2Iterable.make(getPredNodes(node))) {
         result.add(getNumber(s));
       }
       return result;
@@ -770,8 +765,7 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
     public IntSet getSuccNodeNumbers(Statement node) {
       // TODO: optimize me.
       MutableSparseIntSet result = MutableSparseIntSet.makeEmpty();
-      for (Iterator<? extends Statement> it = getSuccNodes(node); it.hasNext();) {
-        Statement s = it.next();
+      for (Statement s : Iterator2Iterable.make(getSuccNodes(node))) {
         result.add(getNumber(s));
       }
       return result;
@@ -789,10 +783,10 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
   }
 
   @Override
-  public PDG getPDG(CGNode node) {
-    PDG result = pdgMap.get(node);
+  public PDG<T> getPDG(CGNode node) {
+    PDG<T> result = pdgMap.get(node);
     if (result == null) {
-      result = new PDG(node, pa, mod, ref, dOptions, cOptions, heapExclude, cg, modRef);
+      result = new PDG<>(node, pa, mod, ref, dOptions, cOptions, heapExclude, cg, modRef);
       pdgMap.put(node, result);
       // Let's not eagerly add nodes, shall we?
       // for (Iterator<? extends Statement> it = result.iterator(); it.hasNext();) {
@@ -820,7 +814,7 @@ public class SDG<T extends InstanceKey> extends AbstractNumberedGraph<Statement>
     return cg.getClassHierarchy();
   }
 
-  public PointerAnalysis<? extends InstanceKey> getPointerAnalysis() {
+  public PointerAnalysis<T> getPointerAnalysis() {
     return pa;
   }
 

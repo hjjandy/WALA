@@ -51,12 +51,12 @@ public class HeapTracer {
     /**
      * Stack of instance objects discovered but not yet traced.
      */
-    private final Stack<Object> scalarWorkList = new Stack<Object>();
+    private final Stack<Object> scalarWorkList = new Stack<>();
 
     /**
      * Stack of array objects discovered but not yet traced.
      */
-    private final Stack<Object> arrayWorkList = new Stack<Object>();
+    private final Stack<Object> arrayWorkList = new Stack<>();
 
     /**
      * How many bytes do we assume the JVM wastes on each instance?
@@ -69,7 +69,7 @@ public class HeapTracer {
     private final boolean traceStatics;
 
     /**
-     * Map: Class -> Integer, the size of each class
+     * Map: Class -&gt; Integer, the size of each class
      */
     private final HashMap<Class<?>, Integer> sizeMap = HashMapFactory.make();
 
@@ -157,8 +157,8 @@ public class HeapTracer {
 	String classpath = System.getProperty("java.class.path");
 	Object[] binDirectories = extractBinDirectories(classpath);
 	HashSet<String> classFileNames = HashSetFactory.make();
-	for (int i = 0; i < binDirectories.length; i++) {
-	    String dir = (String) binDirectories[i];
+	for (Object binDirectorie : binDirectories) {
+	    String dir = (String) binDirectorie;
 	    File fdir = new File(dir);
 	    classFileNames.addAll(findClassNames(dir, fdir));
 	}
@@ -172,7 +172,7 @@ public class HeapTracer {
 
     /**
      * @param fdir
-     * @return Collection <String>representing the class names in a particular
+     * @return {@link Collection}&lt;{@link String}&gt; representing the class names in a particular
      *         file
      */
     /**
@@ -180,14 +180,14 @@ public class HeapTracer {
      *            root of the classpath governing file f
      * @param f
      *            a File or directory
-     * @return Collection <String>representing the class names in f
+     * @return {@link Collection}&lt;{@link String}&gt; representing the class names in f
      */
     private static Collection<String> findClassNames(String rootDir, File f) {
 	HashSet<String> result = HashSetFactory.make();
 	if (f.isDirectory()) {
 	    File[] files = f.listFiles();
-	    for (int i = 0; i < files.length; i++) {
-		result.addAll(findClassNames(rootDir, files[i]));
+	    for (File file : files) {
+		result.addAll(findClassNames(rootDir, file));
 	    }
 	} else {
 	    if (f.getName().indexOf(".class") > 0) {
@@ -224,24 +224,22 @@ public class HeapTracer {
     public Result perform() throws ClassNotFoundException,
 	    IllegalArgumentException, IllegalAccessException {
 	Result result = new Result();
-	IdentityHashMap<Object, Object> objectsVisited = new IdentityHashMap<Object, Object>();
+	IdentityHashMap<Object, Object> objectsVisited = new IdentityHashMap<>();
 	if (traceStatics) {
-	    for (int i = 0; i < rootClasses.length; i++) {
-		Class<?> c = Class.forName(rootClasses[i]);
+	    for (String rootClasse : rootClasses) {
+		Class<?> c = Class.forName(rootClasse);
 		Field[] fields = c.getDeclaredFields();
-		for (int j = 0; j < fields.length; j++) {
-		    if (isStatic(fields[j])) {
-			traverse(fields[j], result, objectsVisited);
+		for (Field field : fields) {
+		    if (isStatic(field)) {
+			traverse(field, result, objectsVisited);
 		    }
 		}
 	    }
 	}
-	for (Iterator<?> it = rootInstances.iterator(); it.hasNext();) {
-	    Object instance = it.next();
+	for (Object instance : rootInstances) {
 	    Class<?> c = instance.getClass();
 	    Set<Field> fields = getAllInstanceFields(c);
-	    for (Iterator<Field> it2 = fields.iterator(); it2.hasNext();) {
-		Field f = it2.next();
+	    for (Field f : fields) {
 		traverse(f, instance, result, objectsVisited);
 	    }
 	}
@@ -264,8 +262,7 @@ public class HeapTracer {
 	    throw new Error();
 	} else {
 	    Collection<Field> fields = getAllInstanceFields(c);
-	    for (Iterator<Field> it = fields.iterator(); it.hasNext();) {
-		Field f = it.next();
+	    for (Field f : fields) {
 		result += sizeOfSlot(f.getType());
 	    }
 	}
@@ -283,7 +280,7 @@ public class HeapTracer {
 	} else {
 	    Integer S = sizeMap.get(c);
 	    if (S == null) {
-		S = new Integer(computeSizeOf(o));
+		S = Integer.valueOf(computeSizeOf(o));
 		sizeMap.put(c, S);
 	    }
 	    return S.intValue();
@@ -416,8 +413,8 @@ public class HeapTracer {
 	    System.err.println(("traverse scalar " + c));
 	}
 	Field[] fields = getAllReferenceInstanceFields(c);
-	for (int i = 0; i < fields.length; i++) {
-	    traverseFieldOfScalar(root, fields[i], scalar, container,
+	for (Field field : fields) {
+	    traverseFieldOfScalar(root, field, scalar, container,
 		    objectsVisited, result);
 	}
     }
@@ -630,13 +627,13 @@ public class HeapTracer {
      */
     class Demographics {
 	/**
-	 * mapping: Object (key) -> Integer (number of instances in a partition)
+	 * mapping: Object (key) -&gt; Integer (number of instances in a partition)
 	 */
 	private final HashMap<Object, Integer> instanceCount = HashMapFactory
 		.make();
 
 	/**
-	 * mapping: Object (key) -> Integer (bytes)
+	 * mapping: Object (key) -&gt; Integer (bytes)
 	 */
 	private final HashMap<Object, Integer> sizeCount = HashMapFactory
 		.make();
@@ -660,13 +657,13 @@ public class HeapTracer {
 	public void registerObject(Object key, Object o) {
 	    Integer I = instanceCount.get(key);
 	    int newCount = (I == null) ? 1 : I.intValue() + 1;
-	    instanceCount.put(key, new Integer(newCount));
+	    instanceCount.put(key, Integer.valueOf(newCount));
 	    totalInstances++;
 
 	    I = sizeCount.get(key);
 	    int s = sizeOf(o);
 	    int newSizeCount = (I == null) ? s : I.intValue() + s;
-	    sizeCount.put(key, new Integer(newSizeCount));
+	    sizeCount.put(key, Integer.valueOf(newSizeCount));
 	    totalSize += s;
 	}
 
@@ -674,10 +671,9 @@ public class HeapTracer {
 	public String toString() {
 	    StringBuffer result = new StringBuffer();
 	    result.append("Totals: " + totalInstances + " " + totalSize + "\n");
-	    TreeSet<Object> sorted = new TreeSet<Object>(new SizeComparator());
+	    TreeSet<Object> sorted = new TreeSet<>(new SizeComparator());
 	    sorted.addAll(instanceCount.keySet());
-	    for (Iterator<Object> it = sorted.iterator(); it.hasNext();) {
-		Object key = it.next();
+	    for (Object key : sorted) {
 		Integer I = instanceCount.get(key);
 		Integer bytes = sizeCount.get(key);
 		result.append("  ").append(I).append("   ").append(bytes)
@@ -729,7 +725,7 @@ public class HeapTracer {
     public class Result {
 
 	/**
-	 * a mapping from Field (static field roots) -> Demographics object
+	 * a mapping from Field (static field roots) -&gt; Demographics object
 	 */
 	private final HashMap<Field, Demographics> roots = HashMapFactory
 		.make();
@@ -757,11 +753,9 @@ public class HeapTracer {
 
 	public int getTotalSize() {
 	    int totalSize = 0;
-	    for (Iterator<Demographics> it = roots.values().iterator(); it
-		    .hasNext();) {
-		Demographics d = it.next();
-		totalSize += d.getTotalSize();
-	    }
+	    for (Demographics d : roots.values()) {
+totalSize += d.getTotalSize();
+  }
 	    return totalSize;
 	}
 
@@ -772,19 +766,17 @@ public class HeapTracer {
 		    + " header bytes per object\n");
 	    int totalInstances = 0;
 	    int totalSize = 0;
-	    for (Iterator<Demographics> it = roots.values().iterator(); it
-		    .hasNext();) {
-		Demographics d = it.next();
-		totalInstances += d.getTotalInstances();
-		totalSize += d.getTotalSize();
-	    }
+	    for (Demographics d : roots.values()) {
+totalInstances += d.getTotalInstances();
+totalSize += d.getTotalSize();
+  }
 	    result.append("Total instances: " + totalInstances + "\n");
 	    result.append("Total size(bytes): " + totalSize + "\n");
 
-	    TreeSet<Field> sortedDemo = new TreeSet<Field>(new SizeComparator());
+	    TreeSet<Field> sortedDemo = new TreeSet<>(new SizeComparator());
 	    sortedDemo.addAll(roots.keySet());
-	    for (Iterator<Field> it = sortedDemo.iterator(); it.hasNext();) {
-		Object root = it.next();
+	    for (Field field : sortedDemo) {
+		Object root = field;
 		Demographics d = roots.get(root);
 		if (d.getTotalSize() > 10000) {
 		    result.append(" root: ").append(root).append("\n");

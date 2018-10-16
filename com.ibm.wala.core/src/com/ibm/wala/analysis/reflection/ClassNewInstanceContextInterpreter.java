@@ -13,6 +13,7 @@ package com.ibm.wala.analysis.reflection;
 import java.util.Iterator;
 import java.util.Map;
 
+import com.ibm.wala.analysis.typeInference.TypeAbstraction;
 import com.ibm.wala.cfg.ControlFlowGraph;
 import com.ibm.wala.cfg.InducedCFG;
 import com.ibm.wala.classLoader.CallSiteReference;
@@ -20,11 +21,14 @@ import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.Context;
+import com.ibm.wala.ipa.callgraph.ContextKey;
 import com.ibm.wala.ipa.callgraph.propagation.SSAContextInterpreter;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ipa.summaries.SyntheticIR;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.IR;
+import com.ibm.wala.ssa.IRView;
 import com.ibm.wala.ssa.ISSABasicBlock;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSAInstructionFactory;
@@ -80,7 +84,7 @@ public class ClassNewInstanceContextInterpreter extends AbstractReflectionInterp
     }
 /** BEGIN Custom change: caching */
     
-    final JavaTypeContext context = (JavaTypeContext) node.getContext();
+    final Context context = node.getContext();
     final IMethod method = node.getMethod();
     final String hashKey = method.toString() + "@" + context.toString();
     
@@ -96,6 +100,11 @@ public class ClassNewInstanceContextInterpreter extends AbstractReflectionInterp
   }
 
   @Override
+  public IRView getIRView(CGNode node) {
+    return getIR(node);
+  }
+
+  @Override
   public int getNumberOfStatements(CGNode node) {
     assert understands(node);
     return getIR(node).getInstructions().length;
@@ -106,7 +115,7 @@ public class ClassNewInstanceContextInterpreter extends AbstractReflectionInterp
     if (node == null) {
       throw new IllegalArgumentException("node is null");
     }
-    if (!(node.getContext() instanceof JavaTypeContext)) {
+    if (!(node.getContext().isA(JavaTypeContext.class))) {
       return false;
     }
     return node.getMethod().getReference().equals(CLASS_NEW_INSTANCE_REF);
@@ -118,10 +127,10 @@ public class ClassNewInstanceContextInterpreter extends AbstractReflectionInterp
       throw new IllegalArgumentException("node is null");
     }
     assert understands(node);
-    JavaTypeContext context = (JavaTypeContext) node.getContext();
-    TypeReference tr = context.getType().getTypeReference();
+    Context context = node.getContext();
+    TypeReference tr = ((TypeAbstraction)context.get(ContextKey.RECEIVER)).getTypeReference();
     if (tr != null) {
-      return new NonNullSingletonIterator<NewSiteReference>(NewSiteReference.make(0, tr));
+      return new NonNullSingletonIterator<>(NewSiteReference.make(0, tr));
     }
     return EmptyIterator.instance();
   }
@@ -132,9 +141,9 @@ public class ClassNewInstanceContextInterpreter extends AbstractReflectionInterp
     return EmptyIterator.instance();
   }
 
-  private IR makeIR(IMethod method, JavaTypeContext context) {
-    SSAInstructionFactory insts = context.getType().getType().getClassLoader().getInstructionFactory();
-    TypeReference tr = context.getType().getTypeReference();
+  private IR makeIR(IMethod method, Context context) {
+    SSAInstructionFactory insts = ((TypeAbstraction)context.get(ContextKey.RECEIVER)).getType().getClassLoader().getInstructionFactory();
+    TypeReference tr = ((TypeAbstraction)context.get(ContextKey.RECEIVER)).getTypeReference();
     if (tr != null) {
       SpecializedMethod m = new SpecializedMethod(method, method.getDeclaringClass(), method.isStatic(), false);
       IClass klass = cha.lookupClass(tr);
@@ -167,7 +176,7 @@ public class ClassNewInstanceContextInterpreter extends AbstractReflectionInterp
     return null;
   }
 
-  private IMethod getPublicDefaultCtor(IClass klass) {
+  private static IMethod getPublicDefaultCtor(IClass klass) {
     IMethod ctorMethod = klass.getMethod(defCtorSelector);
     if (ctorMethod != null && ctorMethod.isPublic() && ctorMethod.getDeclaringClass() == klass) {
       return ctorMethod;

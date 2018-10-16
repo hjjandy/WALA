@@ -43,6 +43,12 @@ public final class WalaProperties {
 
   public final static String ANDROID_DEX_TOOL = "android_dx_tool";
 
+  public final static String ANDROID_APK_TOOL = "android_apk_tool";
+  
+  public final static String DROIDEL_TOOL = "droidel_tool";
+  
+  public final static String DROIDEL_ANDROID_JAR = "droidel_android_jar";
+
   /**
    * Determine the classpath noted in wala.properties for J2SE standard libraries
    * 
@@ -128,28 +134,29 @@ public final class WalaProperties {
     if (fileName == null) {
       throw new IllegalArgumentException("null fileName");
     }
-    final InputStream propertyStream = loader.getResourceAsStream(fileName);
-    if (propertyStream == null) {
-      // create default properties
-      Properties defprop = new Properties();
-      defprop.setProperty(OUTPUT_DIR, "./out");
-      defprop.setProperty(INPUT_DIR, "./in");
-      defprop.setProperty(ECLIPSE_PLUGINS_DIR, "./plugins");
-      defprop.setProperty(WALA_REPORT, "./wala_report.txt");
-      defprop.setProperty(J2EE_DIR, "./j2ee");
-      final String j2selib = guessJavaLib();
-      defprop.setProperty(J2SE_DIR, j2selib);
-      
-      return defprop;
+    try (final InputStream propertyStream = loader.getResourceAsStream(fileName)) {
+      if (propertyStream == null) {
+        // create default properties
+        Properties defprop = new Properties();
+        defprop.setProperty(OUTPUT_DIR, "./out");
+        defprop.setProperty(INPUT_DIR, "./in");
+        defprop.setProperty(ECLIPSE_PLUGINS_DIR, "./plugins");
+        defprop.setProperty(WALA_REPORT, "./wala_report.txt");
+        defprop.setProperty(J2EE_DIR, "./j2ee");
+        final String j2selib = guessJavaLib();
+        defprop.setProperty(J2SE_DIR, j2selib);
+
+        return defprop;
+      }
+      Properties result = new Properties();
+      result.load(propertyStream);
+
+      if (!result.containsKey(J2SE_DIR)) {
+        final String j2selib = guessJavaLib();
+        result.setProperty(J2SE_DIR, j2selib);
+      }
+      return result;
     }
-    Properties result = new Properties();
-    result.load(propertyStream);
-    
-    if (!result.containsKey(J2SE_DIR)) {
-      final String j2selib = guessJavaLib();
-      result.setProperty(J2SE_DIR, j2selib);
-    }
-    return result;
   }
 
   public static String guessJavaLib() throws IOException {

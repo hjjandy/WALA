@@ -13,12 +13,11 @@ package com.ibm.wala.shrikeBT;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
-import java.util.Iterator;
-
 import com.ibm.wala.shrikeBT.ConstantInstruction.ClassToken;
 import com.ibm.wala.shrikeBT.IBinaryOpInstruction.Operator;
 import com.ibm.wala.shrikeBT.analysis.ClassHierarchyProvider;
 import com.ibm.wala.shrikeBT.analysis.Verifier;
+import com.ibm.wala.shrikeCT.BootstrapMethodsReader.BootstrapMethod;
 import com.ibm.wala.shrikeCT.ConstantPoolParser.ReferenceToken;
 
 /**
@@ -172,8 +171,10 @@ public abstract class Compiler implements Constants {
 
   protected abstract int allocateConstantPoolInterfaceMethod(String c, String name, String sig);
 
-  protected abstract String createHelperMethod(boolean isStatic, String sig);
+  protected abstract int allocateConstantPoolInvokeDynamic(BootstrapMethod b, String name, String type);
 
+  protected abstract String createHelperMethod(boolean isStatic, String sig);
+  
   private void collectInstructionInfo() {
     final BitSet s = new BitSet(instructions.length);
     final BitSet localsUsed = new BitSet(32);
@@ -182,8 +183,8 @@ public abstract class Compiler implements Constants {
     IInstruction.Visitor visitor = new IInstruction.Visitor() {
       private void visitTargets(IInstruction instr) {
         int[] ts = instr.getBranchTargets();
-        for (int k = 0; k < ts.length; k++) {
-          s.set(ts[k]);
+        for (int element : ts) {
+          s.set(element);
         }
       }
 
@@ -212,14 +213,13 @@ public abstract class Compiler implements Constants {
       }
     };
 
-    for (int i = 0; i < instructions.length; i++) {
-      instructions[i].visit(visitor);
+    for (IInstruction instruction : instructions) {
+      instruction.visit(visitor);
     }
 
     String[] paramTypes = Util.getParamsTypes(isStatic ? null : TYPE_Object, signature);
     int index = 0;
-    for (int i = 0; i < paramTypes.length; i++) {
-      String t = paramTypes[i];
+    for (String t : paramTypes) {
       localsUsed.set(index);
       if (t.equals(TYPE_long) || t.equals(TYPE_double)) {
         localsWide.set(index);
@@ -230,11 +230,10 @@ public abstract class Compiler implements Constants {
     }
 
     ExceptionHandler[] lastHS = null;
-    for (int i = 0; i < handlers.length; i++) {
-      ExceptionHandler[] hs = handlers[i];
+    for (ExceptionHandler[] hs : handlers) {
       if (hs != lastHS) {
-        for (int j = 0; j < hs.length; j++) {
-          s.set(hs[j].handler);
+        for (ExceptionHandler element : hs) {
+          s.set(element.handler);
         }
         lastHS = hs;
       }
@@ -359,20 +358,20 @@ public abstract class Compiler implements Constants {
       }
 
       int[] bt = instr.getBranchTargets();
-      for (int j = 0; j < bt.length; j++) {
-        int t = bt[j];
+      for (int element : bt) {
+        int t = element;
         if (t < 0 || t >= visited.length) {
           throw new IllegalArgumentException("Branch target at offset " + i + " is out of bounds: " + t + " (max " + visited.length
               + ")");
         }
         if (!visited[t]) {
-          computeStackWordsAt(bt[j], stackLen, stackWords.clone(), visited);
+          computeStackWordsAt(element, stackLen, stackWords.clone(), visited);
         }
       }
 
       ExceptionHandler[] hs = handlers[i];
-      for (int j = 0; j < hs.length; j++) {
-        int t = hs[j].handler;
+      for (ExceptionHandler element : hs) {
+        int t = element.handler;
         if (!visited[t]) {
           byte[] newWords = stackWords.clone();
           newWords[0] = 1;
@@ -448,9 +447,8 @@ public abstract class Compiler implements Constants {
     }
   }
 
-  private boolean applyPatches(ArrayList<Patch> patches) {
-    for (Iterator<Patch> i = patches.iterator(); i.hasNext();) {
-      Patch p = i.next();
+  private static boolean applyPatches(ArrayList<Patch> patches) {
+    for (Patch p : patches) {
       if (!p.apply()) {
         return false;
       }
@@ -479,7 +477,7 @@ public abstract class Compiler implements Constants {
     instructionsToOffsets = new int[instructions.length];
     code = makeCodeBuf();
 
-    ArrayList<Patch> patches = new ArrayList<Patch>();
+    ArrayList<Patch> patches = new ArrayList<>();
 
     int curOffset = startOffset;
     final int[] curOffsetRef = new int[1];
@@ -579,6 +577,7 @@ public abstract class Compiler implements Constants {
           if (!fallToConditional) {
             break;
           }
+          //$FALL-THROUGH$
         case OP_aconst_null:
           if (!fallToConditional && inBasicBlock(i, 2) && instructions[i + 1] instanceof ConditionalBranchInstruction) {
             ConditionalBranchInstruction cbr = (ConditionalBranchInstruction) instructions[i + 1];
@@ -593,6 +592,7 @@ public abstract class Compiler implements Constants {
             break;
           }
           // by Xiangyu
+          //$FALL-THROUGH$
         case OP_ifeq:
         case OP_ifge:
         case OP_ifgt:
@@ -798,6 +798,7 @@ public abstract class Compiler implements Constants {
             break;
           }
         }
+          //$FALL-THROUGH$
         case OP_lload:
         case OP_fload:
         case OP_dload:
@@ -952,14 +953,14 @@ public abstract class Compiler implements Constants {
         }
         case OP_invokedynamic: {
           InvokeDynamicInstruction inv = (InvokeDynamicInstruction) instr;
-          String sig = inv.getMethodSignature();
+          
           int cpIndex;
-
           if (presetConstants != null && presetConstants == inv.getLazyConstantPool()) {
             cpIndex = ((InvokeDynamicInstruction.Lazy) inv).getCPIndex();
           } else {
-            cpIndex = allocateConstantPoolInterfaceMethod(inv.getClassType(), inv.getMethodName(), sig);
+            cpIndex = allocateConstantPoolInvokeDynamic(inv.getBootstrap(), inv.getMethodName(), inv.getMethodSignature());
           }
+
           writeShort(curOffset, cpIndex);
           code[curOffset + 2] = 0;
           code[curOffset + 3] = 0;
@@ -1009,6 +1010,8 @@ public abstract class Compiler implements Constants {
           writeShort(curOffset, allocateConstantPoolClassType(((InstanceofInstruction) instr).getType()));
           curOffset += 2;
           break;
+        default:
+          // do nothing
         }
       } else {
         stackLenRef[0] = stackLen;
@@ -1119,7 +1122,7 @@ public abstract class Compiler implements Constants {
     if (maxCount == 0) {
       return noRawHandlers;
     } else {
-      ArrayList<int[]> rawHandlerList = new ArrayList<int[]>();
+      ArrayList<int[]> rawHandlerList = new ArrayList<>();
 
       for (int i = maxCount; i > 0; i--) {
         for (int j = start; j < end; j++) {
@@ -1144,8 +1147,7 @@ public abstract class Compiler implements Constants {
 
       int[] rawHandlers = new int[4 * rawHandlerList.size()];
       int count = 0;
-      for (Iterator<int[]> iter = rawHandlerList.iterator(); iter.hasNext();) {
-        int[] element = iter.next();
+      for (int[] element : rawHandlerList) {
         System.arraycopy(element, 0, rawHandlers, count, 4);
         count += 4;
       }
@@ -1239,8 +1241,8 @@ public abstract class Compiler implements Constants {
       liveLocals[instruction].set(index);
       int[] back = backEdges[instruction];
       if (back != null) {
-        for (int i = 0; i < back.length; i++) {
-          addLiveVar(back[i], index);
+        for (int element : back) {
+          addLiveVar(element, index);
         }
       }
 
@@ -1259,12 +1261,12 @@ public abstract class Compiler implements Constants {
     for (int i = 0; i < instructions.length; i++) {
       IInstruction instr = instructions[i];
       int[] targets = instr.getBranchTargets();
-      for (int j = 0; j < targets.length; j++) {
-        addBackEdge(targets[j], i);
+      for (int target : targets) {
+        addBackEdge(target, i);
       }
       ExceptionHandler[] hs = handlers[i];
-      for (int j = 0; j < hs.length; j++) {
-        addBackEdge(hs[j].handler, i);
+      for (ExceptionHandler element : hs) {
+        addBackEdge(element.handler, i);
       }
       liveLocals[i] = new BitSet();
     }
@@ -1311,7 +1313,7 @@ public abstract class Compiler implements Constants {
   private HelperPatch makeHelperPatch(int start, int len, int retVar, int unreadStack, int untouchedStack) {
     String retType = retVar >= 0 ? getAndCheckLocalType(start + len, retVar) : "V";
 
-    ArrayList<Instruction> callWrapper = new ArrayList<Instruction>();
+    ArrayList<Instruction> callWrapper = new ArrayList<>();
     int curStackLen = stackTypes[start].length;
 
     StringBuffer sigBuf = new StringBuffer();
@@ -1404,11 +1406,11 @@ public abstract class Compiler implements Constants {
     callWrapper.toArray(patch);
 
     ExceptionHandler[] startHS = handlers[start];
-    ArrayList<ExceptionHandler> newHS = new ArrayList<ExceptionHandler>();
-    for (int i = 0; i < startHS.length; i++) {
-      int t = startHS[i].handler;
+    ArrayList<ExceptionHandler> newHS = new ArrayList<>();
+    for (ExceptionHandler element : startHS) {
+      int t = element.handler;
       if (t < start || t >= start + len) {
-        newHS.add(startHS[i]);
+        newHS.add(element);
       }
     }
     ExceptionHandler[] patchHS = new ExceptionHandler[newHS.size()];
@@ -1453,8 +1455,8 @@ public abstract class Compiler implements Constants {
         if (instructions[i] instanceof ReturnInstruction) {
           outsideBranch = true;
         }
-        for (int j = 0; j < targets.length; j++) {
-          if (targets[j] < start || targets[j] >= start + len) {
+        for (int target : targets) {
+          if (target < start || target >= start + len) {
             outsideBranch = true;
           }
         }
@@ -1474,15 +1476,14 @@ public abstract class Compiler implements Constants {
       for (int i = start; i < start + len; i++) {
         boolean out = false;
         ExceptionHandler[] hs = handlers[i];
-        for (int j = 0; j < hs.length; j++) {
-          int h = hs[j].handler;
+        for (ExceptionHandler element : hs) {
+          int h = element.handler;
           if (h < start || h >= start + len) {
             out = true;
           }
         }
         int[] targets = instructions[i].getBranchTargets();
-        for (int j = 0; j < targets.length; j++) {
-          int t = targets[j];
+        for (int t : targets) {
           if (t < start || t >= start + len) {
             out = true;
           }
@@ -1601,8 +1602,8 @@ public abstract class Compiler implements Constants {
       // make sure that the same external handlers are used all the way through
       ExceptionHandler[] startHS = handlers[start];
       int numOuts = 0;
-      for (int j = 0; j < startHS.length; j++) {
-        int t = startHS[j].handler;
+      for (ExceptionHandler element : startHS) {
+        int t = element.handler;
         if (t < start || t >= start + len) {
           numOuts++;
         }
@@ -1612,12 +1613,12 @@ public abstract class Compiler implements Constants {
       for (int i = start + 1; i < start + len; i++) {
         ExceptionHandler[] hs = handlers[i];
         int matchingOuts = 0;
-        for (int j = 0; j < hs.length; j++) {
-          int t = hs[j].handler;
+        for (ExceptionHandler element : hs) {
+          int t = element.handler;
           if (t < start || t >= start + len) {
             boolean match = false;
-            for (int k = 0; k < startHS.length; k++) {
-              if (startHS[k].equals(hs[j])) {
+            for (ExceptionHandler element2 : startHS) {
+              if (element2.equals(element)) {
                 match = true;
                 break;
               }
@@ -1663,7 +1664,7 @@ public abstract class Compiler implements Constants {
 
   private void makeHelpers() {
     int offset = 0;
-    ArrayList<HelperPatch> patches = new ArrayList<HelperPatch>();
+    ArrayList<HelperPatch> patches = new ArrayList<>();
 
     while (offset + 5000 < instructions.length) {
       HelperPatch p = findBlock(offset, 5000);
@@ -1675,9 +1676,7 @@ public abstract class Compiler implements Constants {
       }
     }
 
-    for (Iterator<HelperPatch> i = patches.iterator(); i.hasNext();) {
-      HelperPatch p = i.next();
-
+    for (HelperPatch p : patches) {
       System.arraycopy(p.code, 0, instructions, p.start, p.code.length);
       for (int j = 0; j < p.length; j++) {
         int index = j + p.start;
@@ -1722,7 +1721,7 @@ public abstract class Compiler implements Constants {
       allocatedLocals = maxLocals;
       makeLiveLocals();
       makeTypes();
-      auxMethods = new ArrayList<Output>();
+      auxMethods = new ArrayList<>();
       makeHelpers();
 
       computeStackWords();

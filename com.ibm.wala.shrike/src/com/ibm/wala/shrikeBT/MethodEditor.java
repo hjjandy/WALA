@@ -145,7 +145,7 @@ public final class MethodEditor {
     }
   }
 
-  private String getStateMessage(int state) {
+  private static String getStateMessage(int state) {
     switch (state) {
     case BEFORE_PASS:
       return "This operation can only be performed before or after an editing pass";
@@ -201,9 +201,9 @@ public final class MethodEditor {
    * Output is the interface that patches use to emit their code into a method body.
    */
   public final static class Output {
-    final ArrayList<IInstruction> newInstructions = new ArrayList<IInstruction>();
+    final ArrayList<IInstruction> newInstructions = new ArrayList<>();
 
-    final ArrayList<ExceptionHandler[]> newInstructionHandlers = new ArrayList<ExceptionHandler[]>();
+    final ArrayList<ExceptionHandler[]> newInstructionHandlers = new ArrayList<>();
 
     int[] instructionsToBytecodes = new int[10];
 
@@ -415,7 +415,7 @@ public final class MethodEditor {
       }
       patchCount++;
     } catch (ArrayIndexOutOfBoundsException e) {
-      throw new IllegalArgumentException("invalid i");
+      throw new IllegalArgumentException("invalid i", e);
     }
   }
 
@@ -454,7 +454,7 @@ public final class MethodEditor {
       instructionHandlerPatches[i] = new HandlerPatch(instructionHandlerPatches[i], catchClass, allocateLabel(), p);
       patchCount++;
     } catch (ArrayIndexOutOfBoundsException e) {
-      throw new IllegalArgumentException("invalid i: " + i);
+      throw new IllegalArgumentException("invalid i: " + i, e);
     }
   }
 
@@ -640,11 +640,11 @@ public final class MethodEditor {
       ExceptionHandler[] hs = handlers[i];
       if (hs.length > 0 && (i == 0 || hs != handlers[i - 1])) {
         if (adjustedHandlers == null) {
-          adjustedHandlers = new IdentityHashMap<ExceptionHandler, Object>();
+          adjustedHandlers = new IdentityHashMap<>();
         }
 
-        for (int j = 0; j < hs.length; j++) {
-          ExceptionHandler h = hs[j];
+        for (ExceptionHandler element : hs) {
+          ExceptionHandler h = element;
           if (!adjustedHandlers.containsKey(h)) {
             adjustedHandlers.put(h, null);
             h.handler = labelDefs[h.handler]; // breaks invariant of ExceptionHandler: immutable!

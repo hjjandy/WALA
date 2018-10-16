@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import com.ibm.wala.analysis.stackMachine.AbstractIntStackMachine;
 import com.ibm.wala.cfg.ControlFlowGraph;
@@ -29,7 +30,6 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.cfg.ExceptionPrunedCFG;
 import com.ibm.wala.ipa.cfg.PrunedCFG;
-import com.ibm.wala.ipa.modref.DelegatingExtendedHeapModel;
 import com.ibm.wala.ipa.modref.ExtendedHeapModel;
 import com.ibm.wala.ipa.modref.ModRef;
 import com.ibm.wala.ipa.slicer.Slicer.ControlDependenceOptions;
@@ -53,13 +53,7 @@ import com.ibm.wala.ssa.SSAPhiInstruction;
 import com.ibm.wala.ssa.SSAPiInstruction;
 import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.types.TypeReference;
-import com.ibm.wala.util.Predicate;
-import com.ibm.wala.util.collections.FilterIterator;
-import com.ibm.wala.util.collections.HashMapFactory;
-import com.ibm.wala.util.collections.HashSetFactory;
-import com.ibm.wala.util.collections.Iterator2Collection;
-import com.ibm.wala.util.collections.Iterator2Iterable;
-import com.ibm.wala.util.collections.MapUtil;
+import com.ibm.wala.util.collections.*;
 import com.ibm.wala.util.config.SetOfClasses;
 import com.ibm.wala.util.debug.Assertions;
 import com.ibm.wala.util.debug.UnimplementedError;
@@ -78,10 +72,10 @@ import com.ibm.wala.util.intset.OrdinalSet;
 public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
 
 /** BEGIN Custom change: control deps */                
-  public enum Dependency {CONTROL_DEP, DATA_AND_CONTROL_DEP};
+  public enum Dependency {CONTROL_DEP, DATA_AND_CONTROL_DEP}
   
   private final SlowSparseNumberedLabeledGraph<Statement, Dependency> delegate =
-    new SlowSparseNumberedLabeledGraph<Statement, Dependency>(Dependency.DATA_AND_CONTROL_DEP);
+    new SlowSparseNumberedLabeledGraph<>(Dependency.DATA_AND_CONTROL_DEP);
 /** END Custom change: control deps */                
 
   private final static boolean VERBOSE = false;
@@ -118,7 +112,7 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
 
   private final CallGraph cg;
 
-  private final ModRef modRef;
+  private final ModRef<T> modRef;
 
   private final Map<CGNode, OrdinalSet<PointerKey>> ref;
 
@@ -134,7 +128,7 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
    */
   public PDG(final CGNode node, PointerAnalysis<T> pa, Map<CGNode, OrdinalSet<PointerKey>> mod,
       Map<CGNode, OrdinalSet<PointerKey>> ref, DataDependenceOptions dOptions, ControlDependenceOptions cOptions,
-      HeapExclusions exclusions, CallGraph cg, ModRef modRef) {
+      HeapExclusions exclusions, CallGraph cg, ModRef<T> modRef) {
     this(node, pa, mod, ref, dOptions, cOptions, exclusions, cg, modRef, false);
   }
 
@@ -146,7 +140,7 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
    */
   public PDG(final CGNode node, PointerAnalysis<T> pa, Map<CGNode, OrdinalSet<PointerKey>> mod,
       Map<CGNode, OrdinalSet<PointerKey>> ref, DataDependenceOptions dOptions, ControlDependenceOptions cOptions,
-      HeapExclusions exclusions, CallGraph cg, ModRef modRef, boolean ignoreAllocHeapDefs) {
+      HeapExclusions exclusions, CallGraph cg, ModRef<T> modRef, boolean ignoreAllocHeapDefs) {
 
     super();
     if (node == null) {
@@ -167,7 +161,7 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
 
   /**
    * WARNING: Since we're using a {@link HashMap} of {@link SSAInstruction}s, and equals() of {@link SSAInstruction} assumes a
-   * canonical representative for each instruction, we <bf>must</bf> ensure that we use the same IR object throughout
+   * canonical representative for each instruction, we <b>must</b> ensure that we use the same IR object throughout
    * initialization!!
    */
   private void populate() {
@@ -178,7 +172,7 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
       isPopulated = true;
 
       Map<SSAInstruction, Integer> instructionIndices = computeInstructionIndices(ir);
-      createNodes(ref, cOptions, ir);
+      createNodes(ref, ir);
       createScalarEdges(cOptions, ir, instructionIndices);
     }
   }
@@ -234,7 +228,7 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
       return;
     }
     ControlFlowGraph<SSAInstruction, ISSABasicBlock> controlFlowGraph = ir.getControlFlowGraph();
-    if (cOptions.equals(ControlDependenceOptions.NO_EXCEPTIONAL_EDGES)) {
+    if (cOptions.isIgnoreExceptions()) {
       PrunedCFG<SSAInstruction, ISSABasicBlock> prunedCFG = ExceptionPrunedCFG.make(controlFlowGraph);
       // In case the CFG has only the entry and exit nodes left 
       // and no edges because the only control dependencies
@@ -251,7 +245,7 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
       Assertions.productionAssertion(cOptions.equals(ControlDependenceOptions.FULL));
     }
 
-    ControlDependenceGraph<SSAInstruction, ISSABasicBlock> cdg = new ControlDependenceGraph<SSAInstruction, ISSABasicBlock>(
+    ControlDependenceGraph<ISSABasicBlock> cdg = new ControlDependenceGraph<>(
         controlFlowGraph);
     for (ISSABasicBlock bb : cdg) {
       if (bb.isExitBlock()) {
@@ -292,10 +286,8 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
       // any
       // control-dependent successors
       if (src != null) {
-        for (Iterator<? extends ISSABasicBlock> succ = cdg.getSuccNodes(bb); succ.hasNext();) {
-          ISSABasicBlock bb2 = succ.next();
-          for (Iterator<SSAInstruction> it2 = bb2.iterator(); it2.hasNext();) {
-            SSAInstruction st = it2.next();
+        for (ISSABasicBlock bb2 : Iterator2Iterable.make(cdg.getSuccNodes(bb))) {
+          for (SSAInstruction st : bb2) {
             if (st != null) {
               Statement dest = ssaInstruction2Statement(st, ir, instructionIndices);
               assert src != null;
@@ -340,12 +332,10 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
      */
     if (!dOptions.equals(DataDependenceOptions.NONE)) {
       for (ISSABasicBlock bb : cdg) {
-        for (Iterator<SSAPhiInstruction> ps = bb.iteratePhis(); ps.hasNext();) {
-          SSAPhiInstruction phi = ps.next();
+        for (SSAPhiInstruction phi : Iterator2Iterable.make(bb.iteratePhis())) {
           Statement phiSt = ssaInstruction2Statement(phi, ir, instructionIndices);
           int phiUseIndex = 0;
-          for (Iterator<? extends ISSABasicBlock> preds = controlFlowGraph.getPredNodes(bb); preds.hasNext();) {
-            ISSABasicBlock pb = preds.next();
+          for (ISSABasicBlock pb : Iterator2Iterable.make(controlFlowGraph.getPredNodes(bb))) {
             int use = phi.getUse(phiUseIndex);
             if (use == AbstractIntStackMachine.TOP) {
               // the predecessor is part of some infeasible bytecode. we probably don't want slices to include such code, so ignore.
@@ -365,8 +355,7 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
               delegate.addEdge(pst, phiSt, Dependency.CONTROL_DEP);
 /** END Custom change: control deps */                
             } else {
-              for (Iterator<? extends ISSABasicBlock> cdps = cdg.getPredNodes(pb); cdps.hasNext();) {
-                ISSABasicBlock cpb = cdps.next();
+              for (ISSABasicBlock cpb : Iterator2Iterable.make(cdg.getPredNodes(pb))) {
 /** BEGIN Custom change: control deps */                
                 if (cpb.getLastInstructionIndex() < 0) {
                   continue;
@@ -438,8 +427,7 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
       }
     }
 
-    for (Iterator<? extends Statement> it = iterator(); it.hasNext();) {
-      Statement s = it.next();
+    for (Statement s : this) {
       switch (s.getKind()) {
       case NORMAL:
       case CATCH:
@@ -459,8 +447,7 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
           // statement
           for (int i = 0; i < statement.getNumberOfDefs(); i++) {
             int def = statement.getDef(i);
-            for (Iterator<SSAInstruction> it2 = DU.getUses(def); it2.hasNext();) {
-              SSAInstruction use = it2.next();
+            for (SSAInstruction use : Iterator2Iterable.make(DU.getUses(def))) {
               if (dOptions.isIgnoreBasePtrs()) {
                 if (use instanceof SSANewInstruction) {
                   // cut out array length parameters
@@ -496,8 +483,7 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
         }
 
         ValueNumberCarrier a = (ValueNumberCarrier) s;
-        for (Iterator<SSAInstruction> it2 = DU.getUses(a.getValueNumber()); it2.hasNext();) {
-          SSAInstruction use = it2.next();
+        for (SSAInstruction use : Iterator2Iterable.make(DU.getUses(a.getValueNumber()))) {
           if (dOptions.isIgnoreBasePtrs()) {
             if (use instanceof SSANewInstruction) {
               // cut out array length parameters
@@ -680,19 +666,17 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
 
     // in reaching defs calculation, exclude heap statements that are
     // irrelevant.
-    Predicate f = new Predicate() {
-      @Override public boolean test(Object o) {
-        if (o instanceof HeapStatement) {
-          HeapStatement h = (HeapStatement) o;
-          return h.getLocation().equals(pk);
-        } else {
-          return true;
-        }
+    Predicate<Statement> f = o -> {
+      if (o instanceof HeapStatement) {
+        HeapStatement h = (HeapStatement) o;
+        return h.getLocation().equals(pk);
+      } else {
+        return true;
       }
     };
-    Collection<Statement> relevantStatements = Iterator2Collection.toSet(new FilterIterator<Statement>(iterator(), f));
+    Collection<Statement> relevantStatements = Iterator2Collection.toSet(new FilterIterator<>(iterator(), f));
 
-    Map<Statement, OrdinalSet<Statement>> heapReachingDefs = new HeapReachingDefs<T>(modRef, heapModel).computeReachingDefs(node, ir, pa, mod,
+    Map<Statement, OrdinalSet<Statement>> heapReachingDefs = new HeapReachingDefs<>(modRef, heapModel).computeReachingDefs(node, ir, pa, mod,
         relevantStatements, new HeapExclusions(SetComplement.complement(new SingletonSet(t))), cg);
 
     for (Statement st : heapReachingDefs.keySet()) {
@@ -739,7 +723,7 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
     }
   }
 
-  private boolean hasBasePointer(SSAInstruction use) {
+  private static boolean hasBasePointer(SSAInstruction use) {
     if (use instanceof SSAFieldAccessInstruction) {
       SSAFieldAccessInstruction f = (SSAFieldAccessInstruction) use;
       return !f.isStatic();
@@ -752,7 +736,7 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
     }
   }
 
-  private int getBasePointer(SSAInstruction use) {
+  private static int getBasePointer(SSAInstruction use) {
     if (use instanceof SSAFieldAccessInstruction) {
       SSAFieldAccessInstruction f = (SSAFieldAccessInstruction) use;
       return f.getRef();
@@ -772,24 +756,25 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
    * @return Statements representing each return instruction in the ir
    */
   private Collection<NormalStatement> computeReturnStatements(final IR ir) {
-    Predicate filter = new Predicate() {
-      @Override public boolean test(Object o) {
-        if (o instanceof NormalStatement) {
-          NormalStatement s = (NormalStatement) o;
-          SSAInstruction st = ir.getInstructions()[s.getInstructionIndex()];
-          return st instanceof SSAReturnInstruction;
-        } else {
-          return false;
-        }
+    Predicate<Statement> filter = o -> {
+      if (o instanceof NormalStatement) {
+        NormalStatement s = (NormalStatement) o;
+        SSAInstruction st = ir.getInstructions()[s.getInstructionIndex()];
+        return st instanceof SSAReturnInstruction;
+      } else {
+        return false;
       }
     };
-    return Iterator2Collection.toSet(new FilterIterator<NormalStatement>(iterator(), filter));
+    return Iterator2Collection.toSet(
+        new MapIterator<>(
+            new FilterIterator<>(iterator(), filter),
+            NormalStatement.class::cast));
   }
 
   /**
    * @return {@link IntSet} representing instruction indices of each PEI in the ir
    */
-  private IntSet getPEIs(final IR ir) {
+  private static IntSet getPEIs(final IR ir) {
     BitVectorIntSet result = new BitVectorIntSet();
     for (int i = 0; i < ir.getInstructions().length; i++) {
       if (ir.getInstructions()[i] != null && ir.getInstructions()[i].isPEI()) {
@@ -801,7 +786,7 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
 
   /**
    * Wrap an {@link SSAInstruction} in a {@link Statement}. WARNING: Since we're using a {@link HashMap} of {@link SSAInstruction}s,
-   * and equals() of {@link SSAInstruction} assumes a canonical representative for each instruction, we <bf>must</bf> ensure that we
+   * and equals() of {@link SSAInstruction} assumes a canonical representative for each instruction, we <b>must</b> ensure that we
    * use the same IR object throughout initialization!!
    */
   private Statement ssaInstruction2Statement(SSAInstruction s, IR ir, Map<SSAInstruction, Integer> instructionIndices) {
@@ -843,7 +828,7 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
       for (int i = 0; i < instructions.length; i++) {
         SSAInstruction s = instructions[i];
         if (s != null) {
-          result.put(s, new Integer(i));
+          result.put(s, Integer.valueOf(i));
         }
       }
     }
@@ -853,7 +838,7 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
   /**
    * Convert a NORMAL or PHI Statement to an SSAInstruction
    */
-  private SSAInstruction statement2SSAInstruction(SSAInstruction[] instructions, Statement s) {
+  private static SSAInstruction statement2SSAInstruction(SSAInstruction[] instructions, Statement s) {
     SSAInstruction statement = null;
     switch (s.getKind()) {
     case NORMAL:
@@ -881,7 +866,7 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
   /**
    * Create all nodes in this PDG. Each node is a Statement.
    */
-  private void createNodes(Map<CGNode, OrdinalSet<PointerKey>> ref, ControlDependenceOptions cOptions, IR ir) {
+  private void createNodes(Map<CGNode, OrdinalSet<PointerKey>> ref, IR ir) {
 
     if (ir != null) {
       createNormalStatements(ir, ref);
@@ -903,7 +888,7 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
    * @param dOptions
    */
   private void createReturnStatements() {
-    ArrayList<Statement> list = new ArrayList<Statement>();
+    ArrayList<Statement> list = new ArrayList<>();
     if (!node.getMethod().getReturnType().equals(TypeReference.Void)) {
       NormalReturnCallee n = new NormalReturnCallee(node);
       delegate.addNode(n);
@@ -932,18 +917,8 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
    */
   private void createCalleeParams() {
     if (paramCalleeStatements == null) {
-      ArrayList<Statement> list = new ArrayList<Statement>();
+      ArrayList<Statement> list = new ArrayList<>();
       int paramCount = node.getMethod().getNumberOfParameters();
-      
-      for (Iterator<CGNode> callers = cg.getPredNodes(node); callers.hasNext(); ) {
-        CGNode caller = callers.next();
-        IR callerIR = caller.getIR();
-        for (Iterator<CallSiteReference> sites = cg.getPossibleSites(caller, node); sites.hasNext(); ) {
-          for (SSAAbstractInvokeInstruction inst : callerIR.getCalls(sites.next())) {
-           paramCount = Math.max(paramCount, inst.getNumberOfParameters()-1);
-          }
-        }
-      }
       
       for (int i = 1; i <= paramCount; i++) {
         ParamCallee s = new ParamCallee(node, i);
@@ -971,8 +946,7 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
    */
   private void createSpecialStatements(IR ir) {
     // create a node for instructions which do not correspond to bytecode
-    for (Iterator<SSAInstruction> it = ir.iterateAllInstructions(); it.hasNext();) {
-      SSAInstruction s = it.next();
+    for (SSAInstruction s : Iterator2Iterable.make(ir.iterateAllInstructions())) {
       if (s instanceof SSAPhiInstruction) {
         delegate.addNode(new PhiStatement(node, (SSAPhiInstruction) s));
       } else if (s instanceof SSAGetCaughtExceptionInstruction) {
@@ -1051,13 +1025,13 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
   /**
    * @return the set of all locations read by any callee at a call site.
    */
-  private OrdinalSet<PointerKey> unionHeapLocations(CallGraph cg, CGNode n, SSAAbstractInvokeInstruction call,
+  private static OrdinalSet<PointerKey> unionHeapLocations(CallGraph cg, CGNode n, SSAAbstractInvokeInstruction call,
       Map<CGNode, OrdinalSet<PointerKey>> loc) {
     BitVectorIntSet bv = new BitVectorIntSet();
     for (CGNode t : cg.getPossibleTargets(n, call.getCallSite())) {
       bv.addAll(loc.get(t).getBackingSet());
     }
-    return new OrdinalSet<PointerKey>(bv, loc.get(n).getMapping());
+    return new OrdinalSet<>(bv, loc.get(n).getMapping());
   }
 
   @Override
@@ -1138,6 +1112,9 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
     case HEAP_RET_CALLER:
       HeapStatement h = (HeapStatement) N;
       createHeapDataDependenceEdges(h.getLocation());
+      break;
+    default:
+      // do nothing
     }
   }
 
@@ -1158,6 +1135,9 @@ public class PDG<T extends InstanceKey> implements NumberedGraph<Statement> {
     case HEAP_RET_CALLER:
       HeapStatement h = (HeapStatement) N;
       createHeapDataDependenceEdges(h.getLocation());
+      break;
+    default:
+      // do nothing
     }
   }
 

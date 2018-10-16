@@ -26,7 +26,7 @@ import com.ibm.wala.util.strings.UTF8Convert;
 public final class Descriptor {
 
   /**
-   * A mapping from Key -> Descriptor
+   * A mapping from Key -&gt; Descriptor
    */
   private static final Map<Key, Descriptor> map = HashMapFactory.make();
 
@@ -206,8 +206,7 @@ public final class Descriptor {
       StringBuffer result = new StringBuffer();
       result.append("(");
       if (parameters != null) {
-        for (int i = 0; i < parameters.length; i++) {
-          TypeName p = parameters[i];
+        for (TypeName p : parameters) {
           result.append(p);
           appendSemicolonIfNeeded(result, p);
         }
@@ -222,8 +221,7 @@ public final class Descriptor {
       StringBuffer result = new StringBuffer();
       result.append("(");
       if (parameters != null) {
-        for (int i = 0; i < parameters.length; i++) {
-          TypeName p = parameters[i];
+        for (TypeName p : parameters) {
           result.append(p.toUnicodeString());
           appendSemicolonIfNeeded(result, p);
         }
@@ -234,7 +232,7 @@ public final class Descriptor {
       return result.toString();
     }
 
-    private void appendSemicolonIfNeeded(StringBuffer result, TypeName p) {
+    private static void appendSemicolonIfNeeded(StringBuffer result, TypeName p) {
       if (p.isArrayType()) {
         TypeName e = p.getInnermostElementType();
         String x = e.toUnicodeString();

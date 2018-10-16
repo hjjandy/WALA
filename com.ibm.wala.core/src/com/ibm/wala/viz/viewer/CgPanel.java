@@ -11,7 +11,6 @@
 package com.ibm.wala.viz.viewer;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -29,9 +28,11 @@ import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ssa.IR;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 
 public class CgPanel extends JSplitPane{
 
+  private static final long serialVersionUID = -4094408933344852549L;
   private final CallGraph cg;
 
   public CgPanel(CallGraph cg) {
@@ -41,30 +42,30 @@ public class CgPanel extends JSplitPane{
     this.setLeftComponent(new JScrollPane(tree));
 
     
-    final IrAndSourceViewer irViewer = new IrAndSourceViewer(cg);
+    final IrAndSourceViewer irViewer = new IrAndSourceViewer();
     this.setRightComponent(irViewer.getComponent());
 
     tree.addTreeSelectionListener(new TreeSelectionListener() {
+
       @Override
       public void valueChanged(TreeSelectionEvent e) {
-        TreePath newLeadSelectionPath = e.getNewLeadSelectionPath();
-        if (null == newLeadSelectionPath){
-          return;
-        }
-        DefaultMutableTreeNode treeNode = (DefaultMutableTreeNode) newLeadSelectionPath.getLastPathComponent();
-        Object userObject = treeNode.getUserObject();
-        if (userObject instanceof CGNode) {
-          CGNode node = (CGNode) userObject;
-          IR ir = node.getIR();
-          irViewer.setIR(ir);
-        } else if (userObject instanceof CallSiteReference){
-          CGNode parentNode =  (CGNode) ((DefaultMutableTreeNode) treeNode.getParent()).getUserObject();
-          IR ir = parentNode.getIR();
-          irViewer.setIRAndPc(ir, ((CallSiteReference) userObject).getProgramCounter());
-        }
+      TreePath newLeadSelectionPath = e.getNewLeadSelectionPath();
+      if (null == newLeadSelectionPath){
+        return;
+      }
+      DefaultMutableTreeNode treeNode = (DefaultMutableTreeNode) newLeadSelectionPath.getLastPathComponent();
+      Object userObject = treeNode.getUserObject();
+      if (userObject instanceof CGNode) {
+        CGNode node = (CGNode) userObject;
+        IR ir1 = node.getIR();
+        irViewer.setIR(ir1);
+      } else if (userObject instanceof CallSiteReference){
+        CGNode parentNode =  (CGNode) ((DefaultMutableTreeNode) treeNode.getParent()).getUserObject();
+        IR ir2 = parentNode.getIR();
+        irViewer.setIRAndPc(ir2, ((CallSiteReference) userObject).getProgramCounter());
+      }
       }
     });
-
   }
 
   private JTree buildTree() {
@@ -106,12 +107,11 @@ public class CgPanel extends JSplitPane{
     }
 
     if (treeNode.getChildCount() == 0) {
-      List<DefaultMutableTreeNode> newChilds = new ArrayList<DefaultMutableTreeNode>();
+      List<DefaultMutableTreeNode> newChilds = new ArrayList<>();
       Object userObject = treeNode.getUserObject();
       if (userObject instanceof CGNode) {
         CGNode cgNode = (CGNode) userObject;
-        for (Iterator<CallSiteReference> iter = cgNode.iterateCallSites(); iter.hasNext();) {
-          CallSiteReference csr = iter.next();
+        for (CallSiteReference csr : Iterator2Iterable.make(cgNode.iterateCallSites())) {
           newChilds.add(new DefaultMutableTreeNode(csr));
         }
       } else {

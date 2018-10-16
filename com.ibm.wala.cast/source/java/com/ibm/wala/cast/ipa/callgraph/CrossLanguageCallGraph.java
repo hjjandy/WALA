@@ -19,18 +19,20 @@ import com.ibm.wala.cast.util.TargetLanguageSelector;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
-import com.ibm.wala.ipa.callgraph.AnalysisCache;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.IAnalysisCacheView;
 import com.ibm.wala.ipa.callgraph.impl.AbstractRootMethod;
 import com.ibm.wala.ipa.callgraph.impl.Everywhere;
 import com.ibm.wala.ipa.callgraph.impl.FakeRootMethod;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.shrikeBT.IInvokeInstruction;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
-import com.ibm.wala.ssa.SSAInvokeInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
+import com.ibm.wala.types.ClassLoaderReference;
 import com.ibm.wala.types.FieldReference;
+import com.ibm.wala.types.MethodReference;
+import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.collections.HashMapFactory;
@@ -49,9 +51,9 @@ import com.ibm.wala.util.strings.Atom;
  */
 public class CrossLanguageCallGraph extends AstCallGraph {
 
-  public CrossLanguageCallGraph(TargetLanguageSelector<AbstractRootMethod, CrossLanguageCallGraph> roots, IClassHierarchy cha,
-      AnalysisOptions options, AnalysisCache cache) {
-    super(cha, options, cache);
+  public CrossLanguageCallGraph(TargetLanguageSelector<AbstractRootMethod, CrossLanguageCallGraph> roots, IMethod fakeRootClass2,
+      AnalysisOptions options, IAnalysisCacheView cache) {
+    super(fakeRootClass2, options, cache);
     this.roots = roots;
   }
 
@@ -91,14 +93,20 @@ public class CrossLanguageCallGraph extends AstCallGraph {
     return (AbstractRootMethod) languageRoots.get(language);
   }
 
+  public static ClassLoaderReference crossCoreLoader = ClassLoaderReference.Primordial;
+  
+  public static TypeReference fakeRootClass = TypeReference.findOrCreate(crossCoreLoader, TypeName.findOrCreate("CrossFakeRoot"));
+  
+  public static MethodReference rootMethod = MethodReference.findOrCreate(fakeRootClass, FakeRootMethod.name, FakeRootMethod.descr);
+  
   public class CrossLanguageFakeRoot extends ScriptFakeRoot {
 
-    public CrossLanguageFakeRoot(IClass declaringClass, IClassHierarchy cha, AnalysisOptions options, AnalysisCache cache) {
-      super(FakeRootMethod.rootMethod, declaringClass, cha, options, cache);
+    public CrossLanguageFakeRoot(IClass declaringClass, IClassHierarchy cha, AnalysisOptions options, IAnalysisCacheView cache) {
+      super(rootMethod, declaringClass, cha, options, cache);
     }
 
-    public CrossLanguageFakeRoot(IClassHierarchy cha, AnalysisOptions options, AnalysisCache cache) {
-      super(FakeRootMethod.rootMethod, cha, options, cache);
+    public CrossLanguageFakeRoot(IClassHierarchy cha, AnalysisOptions options, IAnalysisCacheView cache) {
+      super(rootMethod, cha, options, cache);
     }
 
     public int addPhi(TypeReference type, int[] values) {
@@ -138,14 +146,14 @@ public class CrossLanguageCallGraph extends AstCallGraph {
     }
 
     @Override
-    public SSAInvokeInstruction addInvocation(int[] params, CallSiteReference site) {
+    public SSAAbstractInvokeInstruction addInvocation(int[] params, CallSiteReference site) {
       TypeReference type = site.getDeclaredTarget().getDeclaringClass();
       Atom language = type.getClassLoader().getLanguage();
       AbstractRootMethod root = getLanguageRoot(language);
       return root.addInvocation(params, site);
     }
 
-    public SSAInvokeInstruction addInvocationInternal(int[] params, CallSiteReference site) {
+    public SSAAbstractInvokeInstruction addInvocationInternal(int[] params, CallSiteReference site) {
       return super.addInvocation(params, site);
     }
 
@@ -165,7 +173,7 @@ public class CrossLanguageCallGraph extends AstCallGraph {
     }
   }
 
-  Iterator getLanguageRoots() {
+  Iterator<CGNode> getLanguageRoots() {
     return languageRootNodes.iterator();
   }
 

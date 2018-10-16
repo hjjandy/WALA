@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Iterator;
+import java.util.function.IntFunction;
 
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
@@ -26,9 +27,9 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.CompoundIterator;
 import com.ibm.wala.util.collections.EmptyIterator;
 import com.ibm.wala.util.collections.IntMapIterator;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.debug.Assertions;
 import com.ibm.wala.util.debug.UnimplementedError;
-import com.ibm.wala.util.functions.IntFunction;
 import com.ibm.wala.util.graph.AbstractNumberedGraph;
 import com.ibm.wala.util.graph.NumberedEdgeManager;
 import com.ibm.wala.util.graph.NumberedGraph;
@@ -48,7 +49,7 @@ import com.ibm.wala.util.intset.SparseIntSet;
 /**
  * Basic implementation of {@link HeapGraph}
  */
-public class BasicHeapGraph extends HeapGraphImpl {
+public class BasicHeapGraph<T extends InstanceKey> extends HeapGraphImpl<T> {
 
   private final static boolean VERBOSE = false;
 
@@ -70,7 +71,7 @@ public class BasicHeapGraph extends HeapGraphImpl {
    * @param P governing pointer analysis
    * @throws NullPointerException if P is null
    */
-  public BasicHeapGraph(final PointerAnalysis<InstanceKey> P, final CallGraph callGraph) throws NullPointerException {
+  public BasicHeapGraph(final PointerAnalysis<T> P, final CallGraph callGraph) throws NullPointerException {
     super(P);
     this.callGraph = callGraph;
 
@@ -78,7 +79,7 @@ public class BasicHeapGraph extends HeapGraphImpl {
     final NumberedNodeManager<Object> nodeMgr = new NumberedNodeManager<Object>() {
       @Override
       public Iterator<Object> iterator() {
-        return new CompoundIterator<Object>(pointerKeys.iterator(), P.getInstanceKeyMapping().iterator());
+        return new CompoundIterator<>(pointerKeys.iterator(), P.getInstanceKeyMapping().iterator());
       }
 
       @Override
@@ -99,12 +100,12 @@ public class BasicHeapGraph extends HeapGraphImpl {
       @Override
       public int getNumber(Object N) {
         if (N instanceof PointerKey) {
-          return pointerKeys.getMappedIndex((PointerKey) N);
+          return pointerKeys.getMappedIndex(N);
         } else {
           if (!(N instanceof InstanceKey)) {
             Assertions.UNREACHABLE(N.getClass().toString());
           }
-          int inumber = P.getInstanceKeyMapping().getMappedIndex((InstanceKey) N);
+          int inumber = P.getInstanceKeyMapping().getMappedIndex(N);
           return (inumber == -1) ? -1 : inumber + pointerKeys.getMaximumIndex() + 1;
         }
       }
@@ -130,17 +131,12 @@ public class BasicHeapGraph extends HeapGraphImpl {
 
       @Override
       public Iterator<Object> iterateNodes(IntSet s) {
-        return new NumberedNodeIterator<Object>(s, this);
+        return new NumberedNodeIterator<>(s, this);
       }
     };
 
     final IBinaryNaturalRelation pred = computePredecessors(nodeMgr);
-    final IntFunction<Object> toNode = new IntFunction<Object>() {
-      @Override
-      public Object apply(int i) {
-        return nodeMgr.getNode(i);
-      }
-    };
+    final IntFunction<Object> toNode = nodeMgr::getNode;
 
     this.G = new AbstractNumberedGraph<Object>() {
       private final NumberedEdgeManager<Object> edgeMgr = new NumberedEdgeManager<Object>() {
@@ -151,7 +147,7 @@ public class BasicHeapGraph extends HeapGraphImpl {
           if (p == null) {
             return EmptyIterator.instance();
           } else {
-            return new IntMapIterator<Object>(p.intIterator(), toNode);
+            return new IntMapIterator<>(p.intIterator(), toNode);
           }
         }
 
@@ -179,7 +175,7 @@ public class BasicHeapGraph extends HeapGraphImpl {
             return EmptyIterator.instance();
           }
           SparseIntSet s = factory.make(succ);
-          return new IntMapIterator<Object>(s.intIterator(), toNode);
+          return new IntMapIterator<>(s.intIterator(), toNode);
         }
 
         @Override
@@ -245,8 +241,7 @@ public class BasicHeapGraph extends HeapGraphImpl {
   private OrdinalSetMapping<PointerKey> getPointerKeys() {
     MutableMapping<PointerKey> result = MutableMapping.make();
 
-    for (Iterator<PointerKey> it = getPointerAnalysis().getPointerKeys().iterator(); it.hasNext();) {
-      PointerKey p = it.next();
+    for (PointerKey p : getPointerAnalysis().getPointerKeys()) {
       result.add(p);
     }
     return result;
@@ -256,11 +251,11 @@ public class BasicHeapGraph extends HeapGraphImpl {
   private int[] computeSuccNodeNumbers(Object N, NumberedNodeManager<Object> nodeManager) {
     if (N instanceof PointerKey) {
       PointerKey P = (PointerKey) N;
-      OrdinalSet<InstanceKey> S = getPointerAnalysis().getPointsToSet(P);
+      OrdinalSet<T> S = getPointerAnalysis().getPointsToSet(P);
       int[] result = new int[S.size()];
       int i = 0;
-      for (Iterator<InstanceKey> it = S.iterator(); it.hasNext();) {
-        result[i] = nodeManager.getNumber(it.next());
+      for (T t : S) {
+        result[i] = nodeManager.getNumber(t);
         i++;
       }
       return result;
@@ -268,9 +263,7 @@ public class BasicHeapGraph extends HeapGraphImpl {
       InstanceKey I = (InstanceKey) N;
       TypeReference T = I.getConcreteType().getReference();
 
-      if (T == null) {
-        assert T != null : "null concrete type from " + I.getClass();
-      }
+      assert T != null : "null concrete type from " + I.getClass();
       if (T.isArrayType()) {
         PointerKey p = getHeapModel().getPointerKeyForArrayContents(I);
         if (p == null || !nodeManager.containsNode(p)) {
@@ -280,12 +273,9 @@ public class BasicHeapGraph extends HeapGraphImpl {
         }
       } else {
         IClass klass = getHeapModel().getClassHierarchy().lookupClass(T);
-        if (klass == null) {
-          assert klass != null : "null klass for type " + T;
-        }
+        assert klass != null : "null klass for type " + T;
         MutableSparseIntSet result = MutableSparseIntSet.makeEmpty();
-        for (Iterator<IField> it = klass.getAllInstanceFields().iterator(); it.hasNext();) {
-          IField f = it.next();
+        for (IField f : klass.getAllInstanceFields()) {
           if (!f.getReference().getFieldType().isPrimitiveType()) {
             PointerKey p = getHeapModel().getPointerKeyForInstanceField(I, f);
             if (p != null && nodeManager.containsNode(p)) {
@@ -330,8 +320,7 @@ public class BasicHeapGraph extends HeapGraphImpl {
       if (!(n instanceof LocalPointerKey)) {
         int[] succ = computeSuccNodeNumbers(n, nodeManager);
         if (succ != null) {
-          for (int z = 0; z < succ.length; z++) {
-            int j = succ[z];
+          for (int j : succ) {
             R.add(j, i);
           }
         }
@@ -344,9 +333,8 @@ public class BasicHeapGraph extends HeapGraphImpl {
    */
   private void computePredecessorsForLocals(NumberedNodeManager<Object> nodeManager, BasicNaturalRelation R) {
 
-    ArrayList<LocalPointerKey> list = new ArrayList<LocalPointerKey>();
-    for (Iterator<Object> it = nodeManager.iterator(); it.hasNext();) {
-      Object n = it.next();
+    ArrayList<LocalPointerKey> list = new ArrayList<>();
+    for (Object n : nodeManager) {
       if (n instanceof LocalPointerKey) {
         list.add((LocalPointerKey) n);
       }
@@ -364,8 +352,7 @@ public class BasicHeapGraph extends HeapGraphImpl {
       int num = nodeManager.getNumber(n);
       int[] succ = computeSuccNodeNumbers(n, nodeManager);
       if (succ != null) {
-        for (int z = 0; z < succ.length; z++) {
-          int j = succ[z];
+        for (int j : succ) {
           R.add(j, num);
         }
       }
@@ -520,8 +507,7 @@ public class BasicHeapGraph extends HeapGraphImpl {
       Object node = getNode(i);
       if (node != null) {
         result.append(i).append(" -> ");
-        for (Iterator it = getSuccNodes(node); it.hasNext();) {
-          Object s = it.next();
+        for (Object s : Iterator2Iterable.make(getSuccNodes(node))) {
           result.append(getNumber(s)).append(" ");
         }
         result.append("\n");

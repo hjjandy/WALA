@@ -13,17 +13,22 @@ package com.ibm.wala.examples.drivers;
 import java.io.File;
 import java.io.IOException;
 import java.util.Properties;
+import java.util.function.Predicate;
 
+import com.ibm.wala.classLoader.Language;
 import com.ibm.wala.core.tests.callGraph.CallGraphTestUtil;
 import com.ibm.wala.examples.properties.WalaExamplesProperties;
-import com.ibm.wala.ipa.callgraph.AnalysisCache;
+import com.ibm.wala.ipa.callgraph.AnalysisCacheImpl;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.AnalysisScope;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.CallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.Entrypoint;
 import com.ibm.wala.ipa.callgraph.impl.Util;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.cha.ClassHierarchy;
+import com.ibm.wala.ipa.cha.ClassHierarchyFactory;
 import com.ibm.wala.ipa.slicer.HeapStatement;
 import com.ibm.wala.ipa.slicer.MethodEntryStatement;
 import com.ibm.wala.ipa.slicer.MethodExitStatement;
@@ -34,7 +39,6 @@ import com.ibm.wala.ipa.slicer.Statement;
 import com.ibm.wala.properties.WalaProperties;
 import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.WalaException;
-import com.ibm.wala.util.Predicate;
 import com.ibm.wala.util.config.AnalysisScopeReader;
 import com.ibm.wala.util.debug.Assertions;
 import com.ibm.wala.util.graph.Graph;
@@ -121,13 +125,14 @@ public class PDFSDG {
 
       // generate a WALA-consumable wrapper around the incoming scope object
       
-      ClassHierarchy cha = ClassHierarchy.make(scope);
+      ClassHierarchy cha = ClassHierarchyFactory.make(scope);
       Iterable<Entrypoint> entrypoints = com.ibm.wala.ipa.callgraph.impl.Util.makeMainEntrypoints(scope, cha, mainClass);
       AnalysisOptions options = CallGraphTestUtil.makeAnalysisOptions(scope, entrypoints);
 
-      CallGraphBuilder builder = Util.makeZeroOneCFABuilder(options, new AnalysisCache(), cha, scope);
+      CallGraphBuilder<InstanceKey> builder = Util.makeZeroOneCFABuilder(Language.JAVA, options, new AnalysisCacheImpl(), cha, scope);
       CallGraph cg = builder.makeCallGraph(options,null);
-      SDG sdg = new SDG(cg, builder.getPointerAnalysis(), dOptions, cOptions);
+      final PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+      SDG<?> sdg = new SDG<>(cg, pointerAnalysis, dOptions, cOptions);
       try {
         GraphIntegrity.check(sdg);
       } catch (UnsoundGraphException e1) {
@@ -160,45 +165,39 @@ public class PDFSDG {
     }
   }
 
-  private static Graph<Statement> pruneSDG(final SDG sdg) {
-    Predicate<Statement> f = new Predicate<Statement>() {
-      @Override public boolean test(Statement s) {
-        if (s.getNode().equals(sdg.getCallGraph().getFakeRootNode())) {
-          return false;
-        } else if (s instanceof MethodExitStatement || s instanceof MethodEntryStatement) {
-          return false;
-        } else {
-          return true;
-        }
+  private static Graph<Statement> pruneSDG(final SDG<?> sdg) {
+    Predicate<Statement> f = s -> {
+      if (s.getNode().equals(sdg.getCallGraph().getFakeRootNode())) {
+        return false;
+      } else if (s instanceof MethodExitStatement || s instanceof MethodEntryStatement) {
+        return false;
+      } else {
+        return true;
       }
     };
     return GraphSlicer.prune(sdg, f);
   }
 
   private static NodeDecorator<Statement> makeNodeDecorator() {
-    return new NodeDecorator<Statement>() {
-      @Override
-      public String getLabel(Statement s) throws WalaException {
-        switch (s.getKind()) {
-        case HEAP_PARAM_CALLEE:
-        case HEAP_PARAM_CALLER:
-        case HEAP_RET_CALLEE:
-        case HEAP_RET_CALLER:
-          HeapStatement h = (HeapStatement) s;
-          return s.getKind() + "\\n" + h.getNode() + "\\n" + h.getLocation();
-        case EXC_RET_CALLEE:
-        case EXC_RET_CALLER:
-        case NORMAL:
-        case NORMAL_RET_CALLEE:
-        case NORMAL_RET_CALLER:
-        case PARAM_CALLEE:
-        case PARAM_CALLER:
-        case PHI:
-        default:
-          return s.toString();
-        }
+    return s -> {
+      switch (s.getKind()) {
+      case HEAP_PARAM_CALLEE:
+      case HEAP_PARAM_CALLER:
+      case HEAP_RET_CALLEE:
+      case HEAP_RET_CALLER:
+        HeapStatement h = (HeapStatement) s;
+        return s.getKind() + "\\n" + h.getNode() + "\\n" + h.getLocation();
+      case EXC_RET_CALLEE:
+      case EXC_RET_CALLER:
+      case NORMAL:
+      case NORMAL_RET_CALLEE:
+      case NORMAL_RET_CALLER:
+      case PARAM_CALLEE:
+      case PARAM_CALLER:
+      case PHI:
+      default:
+        return s.toString();
       }
-
     };
   }
 

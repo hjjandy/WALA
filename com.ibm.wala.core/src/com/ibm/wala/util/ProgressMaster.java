@@ -18,7 +18,6 @@ import java.lang.management.MemoryType;
 
 import javax.management.InstanceNotFoundException;
 import javax.management.ListenerNotFoundException;
-import javax.management.Notification;
 import javax.management.NotificationListener;
 import javax.management.openmbean.CompositeData;
 
@@ -80,7 +79,7 @@ public class ProgressMaster implements IProgressMonitor {
 
   public synchronized void reset() {
     killNanny();
-    setCanceled(false);
+    setCanceled();
     timedOut = false;
     tooMuchMemory = false;
   }
@@ -118,7 +117,7 @@ public class ProgressMaster implements IProgressMonitor {
     return delegate.isCanceled() || timedOut || tooMuchMemory;
   }
 
-  public void setCanceled(boolean value) {
+  public void setCanceled() {
     killNanny();
   }
 
@@ -131,7 +130,7 @@ public class ProgressMaster implements IProgressMonitor {
 
   @Override
   public void cancel() {
-    setCanceled(true);
+    setCanceled();
   }
 /** END Custom change: subtasks and canceling */
   @Override
@@ -146,6 +145,8 @@ public class ProgressMaster implements IProgressMonitor {
   }
 
   public static class TooMuchMemoryUsed extends Exception {
+
+    private static final long serialVersionUID = -7174940833610292692L;
 
   }
 
@@ -167,24 +168,21 @@ public class ProgressMaster implements IProgressMonitor {
           final Thread nannyThread = this;
           gcbean = ManagementFactory.getMemoryMXBean();
 
-          listener = new NotificationListener() {
-            @Override
-            public void handleNotification(Notification notification, Object arg1) {
-              MemoryNotificationInfo info = MemoryNotificationInfo.from((CompositeData) notification.getUserData());
-              long used = info.getUsage().getUsed();
-              long max = Runtime.getRuntime().maxMemory();
+          listener = (notification, arg1) -> {
+            MemoryNotificationInfo info = MemoryNotificationInfo.from((CompositeData) notification.getUserData());
+            long used = info.getUsage().getUsed();
+            long max = Runtime.getRuntime().maxMemory();
 
-              if (((double)used/(double)max) > MAX_USED_MEM_BEFORE_BACKING_OUT) {
-                System.err.println("used " + used + " of " + max);
-                tooMuchMemory = true;
-                nannyThread.interrupt();
-              }
+            if (((double)used/(double)max) > MAX_USED_MEM_BEFORE_BACKING_OUT) {
+              System.err.println("used " + used + " of " + max);
+              tooMuchMemory = true;
+              nannyThread.interrupt();
             }
           };
           try {
             ManagementFactory.getPlatformMBeanServer().addNotificationListener(gcbean.getObjectName(), listener, null, null);
           } catch (InstanceNotFoundException e) {
-            throw new Error("cannot find existing bean");
+            throw new Error("cannot find existing bean", e);
           }
         }
 
@@ -194,7 +192,7 @@ public class ProgressMaster implements IProgressMonitor {
           try {
           ManagementFactory.getPlatformMBeanServer().removeNotificationListener(gcbean.getObjectName(), listener);
           } catch (InstanceNotFoundException | ListenerNotFoundException e) {
-            throw new Error("cannot find existing bean");
+            throw new Error("cannot find existing bean", e);
           }
         }
         

@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.Set;
 
 import com.ibm.wala.cfg.ControlFlowGraph;
-import com.ibm.wala.dataflow.graph.DataflowSolver;
 import com.ibm.wala.ipa.cfg.PrunedCFG;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.ISSABasicBlock;
@@ -58,7 +57,7 @@ import com.ibm.wala.util.graph.impl.SparseNumberedGraph;
 /**
  * Intraprocedural dataflow analysis to detect impossible NullPointerExceptions.
  * 
- * @author Juergen Graf <graf@kit.edu>
+ * @author Juergen Graf &lt;graf@kit.edu&gt;
  *
  */
 public class IntraprocNullPointerAnalysis<T extends ISSABasicBlock> {
@@ -85,7 +84,7 @@ public class IntraprocNullPointerAnalysis<T extends ISSABasicBlock> {
       maxVarNum = ir.getSymbolTable().getMaxValueNumber();
     }
     
-    this.ignoreExceptions = new HashSet<TypeReference>();
+    this.ignoreExceptions = new HashSet<>();
     
     if (ignoreExceptions != null) {
       for (TypeReference tRef : ignoreExceptions) {
@@ -99,7 +98,7 @@ public class IntraprocNullPointerAnalysis<T extends ISSABasicBlock> {
 
   private static <T extends ISSABasicBlock> List<T> 
       searchNodesWithPathToCatchAll(ControlFlowGraph<SSAInstruction, T> cfg) {
-    final List<T> nodes = new LinkedList<T>();
+    final List<T> nodes = new LinkedList<>();
 
     for (final T exp : cfg) {
       final List<T> excSucc = cfg.getExceptionalSuccessors(exp);
@@ -135,14 +134,13 @@ public class IntraprocNullPointerAnalysis<T extends ISSABasicBlock> {
         pruned = cfg;
       } else {
         final List<T> catched = searchNodesWithPathToCatchAll(cfg);
-        final NullPointerFrameWork<T> problem = new NullPointerFrameWork<T>(cfg, ir);
-        final int[] paramValNum = ir.getParameterValueNumbers();
+        final NullPointerFrameWork<T> problem = new NullPointerFrameWork<>(cfg, ir);
       
-        solver = new NullPointerSolver<T>(problem, maxVarNum, paramValNum, initialState);
+        solver = new NullPointerSolver<>(problem, maxVarNum, cfg.entry(), ir, initialState);
         
         solver.solve(progress);
         
-        final Graph<T> deleted = createDeletedGraph(solver);
+        final Graph<T> deleted = createDeletedGraph();
         
         for (final T ch : catched) {
           deleted.addNode(ch);
@@ -153,7 +151,7 @@ public class IntraprocNullPointerAnalysis<T extends ISSABasicBlock> {
         for (T node : deleted) {
           deletedEdges += deleted.getSuccNodeCount(node);
         }
-        final NegativeGraphFilter<T> filter = new NegativeGraphFilter<T>(deleted);
+        final NegativeGraphFilter<T> filter = new NegativeGraphFilter<>(deleted);
         
         final PrunedCFG<SSAInstruction, T> newCfg = PrunedCFG.make(cfg, filter);
 
@@ -162,8 +160,8 @@ public class IntraprocNullPointerAnalysis<T extends ISSABasicBlock> {
     }
   }
   
-  private Graph<T> createDeletedGraph(NullPointerSolver<T> solver) {
-    NegativeCFGBuilderVisitor nCFGbuilder = new NegativeCFGBuilderVisitor(solver);
+  private Graph<T> createDeletedGraph() {
+    NegativeCFGBuilderVisitor nCFGbuilder = new NegativeCFGBuilderVisitor();
     for (T bb : cfg) {
       nCFGbuilder.work(bb);
     }
@@ -195,56 +193,15 @@ public class IntraprocNullPointerAnalysis<T extends ISSABasicBlock> {
       // empty IR ... so states have not changed and we can return the initial state as a save approximation 
       return new NullPointerState(maxVarNum, ir.getSymbolTable(), initialState);
     } else {
-      return solver.getIn(block);
+      return solver.getOut(block);
     }
-  }
-  
-  private class NullPointerSolver<B extends ISSABasicBlock> extends DataflowSolver<B, NullPointerState> {
-
-    private final int maxVarNum;
-    private final ParameterState parameterState;
-
-    private NullPointerSolver(NullPointerFrameWork<B> problem, int maxVarNum, int[] paramVarNum) {
-      this(problem, maxVarNum, paramVarNum, null);
-    }
-    
-    private NullPointerSolver(NullPointerFrameWork<B> problem, int maxVarNum, int[] paramVarNum, ParameterState initialState) {
-      super(problem);
-      this.maxVarNum = maxVarNum;
-      this.parameterState = initialState;
-    }
-    
-    /* (non-Javadoc)
-     * @see com.ibm.wala.dataflow.graph.DataflowSolver#makeEdgeVariable(java.lang.Object, java.lang.Object)
-     */
-    @Override
-    protected NullPointerState makeEdgeVariable(B src, B dst) {
-      return new NullPointerState(maxVarNum, ir.getSymbolTable(), parameterState);
-    }
-
-    /* (non-Javadoc)
-     * @see com.ibm.wala.dataflow.graph.DataflowSolver#makeNodeVariable(java.lang.Object, boolean)
-     */
-    @Override
-    protected NullPointerState makeNodeVariable(B n, boolean IN) {
-      return new NullPointerState(maxVarNum, ir.getSymbolTable(), parameterState);
-    }
-
-    @Override
-    protected NullPointerState[] makeStmtRHS(int size) {
-      return new NullPointerState[size];
-    }
-    
   }
   
   private class NegativeCFGBuilderVisitor implements IVisitor {
 
     private final Graph<T> deleted;
-    private final NullPointerSolver<T> solver;
-    
-    private NegativeCFGBuilderVisitor(NullPointerSolver<T> solver) {
-      this.solver = solver;
-      this.deleted = new SparseNumberedGraph<T>(2);
+    private NegativeCFGBuilderVisitor() {
+      this.deleted = new SparseNumberedGraph<>(2);
       for (T bb : cfg) {
         deleted.addNode(bb);
       }
@@ -263,7 +220,7 @@ public class IntraprocNullPointerAnalysis<T extends ISSABasicBlock> {
       SSAInstruction instr = NullPointerTransferFunctionProvider.getRelevantInstruction(bb);
       
       if (instr != null) {
-        currentState = solver.getIn(bb);
+        currentState = getState(bb);
         currentBlock = bb;
         instr.visit(this);
         currentState = null;
@@ -287,7 +244,7 @@ public class IntraprocNullPointerAnalysis<T extends ISSABasicBlock> {
         return mState != null && !mState.throwsException((SSAAbstractInvokeInstruction) instr);  
       } else {
         Collection<TypeReference> exc = instr.getExceptionTypes();
-        Set<TypeReference> myExcs = new HashSet<TypeReference>(exc);
+        Set<TypeReference> myExcs = new HashSet<>(exc);
         myExcs.removeAll(ignoreExceptions);
         
         return myExcs.size() == 1 && myExcs.contains(TypeReference.JavaLangNullPointerException);
@@ -298,10 +255,11 @@ public class IntraprocNullPointerAnalysis<T extends ISSABasicBlock> {
       assert instr.isPEI();
       
       if (instr instanceof SSAAbstractInvokeInstruction) {
+        assert ((SSAAbstractInvokeInstruction) instr).isStatic();
         return mState != null && !mState.throwsException((SSAAbstractInvokeInstruction) instr); 
       } else {
         Collection<TypeReference> exc = instr.getExceptionTypes();
-        Set<TypeReference> myExcs = new HashSet<TypeReference>(exc);
+        Set<TypeReference> myExcs = new HashSet<>(exc);
         myExcs.removeAll(ignoreExceptions);
         
         return myExcs.isEmpty();

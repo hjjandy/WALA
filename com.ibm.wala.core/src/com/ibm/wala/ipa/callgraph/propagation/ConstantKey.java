@@ -30,13 +30,14 @@ public final class ConstantKey<T> implements InstanceKey {
   public ConstantKey(T value, IClass valueClass) {
     this.value = value;
     this.valueClass = valueClass;
+    assert valueClass != null;
   }
 
   @Override
   public boolean equals(Object obj) {
     if (obj instanceof ConstantKey) {
       ConstantKey other = (ConstantKey) obj;
-      return value == null ? other.value == null : value.equals(other.value);
+      return valueClass.equals(other.valueClass) ? (value == null ? other.value == null : value.equals(other.value)) : false;
     } else {
       return false;
     }
@@ -52,7 +53,7 @@ public final class ConstantKey<T> implements InstanceKey {
     if (value == null)
       return "[ConstantKey:null]";
     else
-      return "[ConstantKey:" + value + ":" + value.getClass() + "]";
+      return "[ConstantKey:" + value + ":" + valueClass.getReference() + "]";
   }
 
   /*

@@ -10,8 +10,6 @@
  *******************************************************************************/
 package com.ibm.wala.util.intset;
 
-import java.io.Serializable;
-
 import com.ibm.wala.util.debug.Assertions;
 
 /**
@@ -23,7 +21,9 @@ import com.ibm.wala.util.debug.Assertions;
  * TODO: even for small sets, we probably want to work on this to reduce the
  * allocation activity.
  */
-public class MutableSparseIntSet extends SparseIntSet implements MutableIntSet, Serializable {
+public class MutableSparseIntSet extends SparseIntSet implements MutableIntSet {
+
+	private static final long serialVersionUID = 1479453398189400698L;
 
 	/**
 	 * If forced to grow the backing array .. then by how much
@@ -325,13 +325,10 @@ public class MutableSparseIntSet extends SparseIntSet implements MutableIntSet, 
 			return addAll((SparseIntSet) set);
 		} else {
 			int oldSize = size;
-			set.foreach(new IntSetAction() {
-				@Override
-        public void act(int i) {
-					if (!contains(i))
-						add(i);
-				}
-			});
+			set.foreach(i -> {
+      	if (!contains(i))
+      		add(i);
+      });
 
 			if (DEBUG_LARGE && size() > TRAP_SIZE) {
 				Assertions.UNREACHABLE();

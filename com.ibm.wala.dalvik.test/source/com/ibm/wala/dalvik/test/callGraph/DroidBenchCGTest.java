@@ -10,11 +10,12 @@
  *******************************************************************************/
 package com.ibm.wala.dalvik.test.callGraph;
 
+import static com.ibm.wala.dalvik.test.util.Util.walaProperties;
+
 import java.io.File;
 import java.net.URI;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -29,19 +30,15 @@ import com.ibm.wala.ipa.callgraph.AnalysisOptions.ReflectionOptions;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
-import com.ibm.wala.shrikeCT.InvalidClassFileException;
 import com.ibm.wala.types.ClassLoaderReference;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.NullProgressMonitor;
-import com.ibm.wala.util.Predicate;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.collections.Pair;
-import com.ibm.wala.util.functions.VoidFunction;
 import com.ibm.wala.util.io.FileUtil;
-
-import static com.ibm.wala.dalvik.test.util.Util.walaProperties;
 
 public abstract class DroidBenchCGTest extends DalvikCallGraphTestBase {
 
@@ -81,12 +78,10 @@ public abstract class DroidBenchCGTest extends DalvikCallGraphTestBase {
 		 uncalledFunctions.put("VirtualDispatch2.apk",  x);
 	}
 	
-	public static Set<IMethod> assertUserCodeReachable(CallGraph cg, Set<MethodReference> uncalled) throws InvalidClassFileException {
+	public static Set<IMethod> assertUserCodeReachable(CallGraph cg, Set<MethodReference> uncalled) {
 		Set<IMethod> result = HashSetFactory.make();
-	  for(Iterator<IClass> clss = cg.getClassHierarchy().getLoader(ClassLoaderReference.Application).iterateAllClasses();
-			clss.hasNext(); ) 
+	  for(IClass cls : Iterator2Iterable.make(cg.getClassHierarchy().getLoader(ClassLoaderReference.Application).iterateAllClasses())) 
 		{
-			IClass cls = clss.next();
 			if (cls.isInterface()) {
 				continue;
 			}
@@ -149,33 +144,31 @@ public abstract class DroidBenchCGTest extends DalvikCallGraphTestBase {
 	}
 
   public static Collection<Object[]> generateData(final URI[] androidLibs, final File androidJavaJar, final String filter) {
-    String f = walaProperties.getProperty("droidbench.root");
-    if (f == null || !new File(f).exists()) {
-      f = "/tmp/DroidBench";       
-    }
-  
-    System.err.println("Use " + f + " as droid bench root");
-    assert new File(f).exists() : "Use " + f + " as droid bench root";
-    assert new File(f + "/apk/").exists() : "Use " + f + " as droid bench root";
-    return generateData(f, androidLibs, androidJavaJar, filter);
+
+    return generateData(getDroidBenchRoot(), androidLibs, androidJavaJar, filter);
+  }
+
+  public static String getDroidBenchRoot(){
+      String f = walaProperties.getProperty("droidbench.root");
+      if (f == null || !new File(f).exists()) {
+          f = "/tmp/DroidBench";
+      }
+
+      System.err.println("Use " + f + " as droid bench root");
+      assert new File(f).exists() : "Use " + f + " as droid bench root";
+      assert new File(f + "/apk/").exists() : "Use " + f + " as droid bench root";
+      return f;
   }
   
 	public static Collection<Object[]> generateData(String droidBenchRoot, final URI[] androidLibs, final File androidJavaJar, final String filter) {
-	  final List<Object[]> files = new LinkedList<Object[]>();
-	  FileUtil.recurseFiles(new VoidFunction<File>() {
-	    @Override
-	    public void apply(File f) {
-	      Set<MethodReference> uncalled = uncalledFunctions.get(f.getName());
-	      if (uncalled == null) {
-	        uncalled = Collections.emptySet();
-	      }
-	      files.add(new Object[]{ androidLibs, androidJavaJar, f.getAbsolutePath(), uncalled }); 
-	    }
-	  }, new Predicate<File>() {
-	    @Override
-	    public boolean test(File t) {
-	      return (filter == null || t.getAbsolutePath().contains(filter)) && t.getName().endsWith("apk") && ! skipTests.contains(t.getName().toString());
-	    } }, new File(droidBenchRoot + "/apk/"));
+	  final List<Object[]> files = new LinkedList<>();
+	  FileUtil.recurseFiles(f -> {
+      Set<MethodReference> uncalled = uncalledFunctions.get(f.getName());
+      if (uncalled == null) {
+        uncalled = Collections.emptySet();
+      }
+      files.add(new Object[]{ androidLibs, androidJavaJar, f.getAbsolutePath(), uncalled }); 
+    }, t -> (filter == null || t.getAbsolutePath().contains(filter)) && t.getName().endsWith("apk") && ! skipTests.contains(t.getName().toString()), new File(droidBenchRoot + "/apk/"));
 	  return files;
 	}
 }

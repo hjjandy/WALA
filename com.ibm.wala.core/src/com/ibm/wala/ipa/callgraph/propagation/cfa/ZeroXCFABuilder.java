@@ -11,10 +11,11 @@
 package com.ibm.wala.ipa.callgraph.propagation.cfa;
 
 import com.ibm.wala.analysis.reflection.ReflectionContextInterpreter;
-import com.ibm.wala.ipa.callgraph.AnalysisCache;
+import com.ibm.wala.classLoader.Language;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.AnalysisScope;
 import com.ibm.wala.ipa.callgraph.ContextSelector;
+import com.ibm.wala.ipa.callgraph.IAnalysisCacheView;
 import com.ibm.wala.ipa.callgraph.impl.DefaultContextSelector;
 import com.ibm.wala.ipa.callgraph.impl.DelegatingContextSelector;
 import com.ibm.wala.ipa.callgraph.impl.Util;
@@ -27,10 +28,10 @@ import com.ibm.wala.ipa.cha.IClassHierarchy;
  */
 public class ZeroXCFABuilder extends SSAPropagationCallGraphBuilder {
 
-  public ZeroXCFABuilder(IClassHierarchy cha, AnalysisOptions options, AnalysisCache cache, ContextSelector appContextSelector,
+  public ZeroXCFABuilder(Language l, IClassHierarchy cha, AnalysisOptions options, IAnalysisCacheView cache, ContextSelector appContextSelector,
       SSAContextInterpreter appContextInterpreter, int instancePolicy) {
 
-    super(cha, options, cache, new DefaultPointerKeyFactory());
+    super(l.getFakeRootMethod(cha, options, cache), options, cache, new DefaultPointerKeyFactory());
 
     ContextSelector def = new DefaultContextSelector(options, cha);
     ContextSelector contextSelector = appContextSelector == null ? def : new DelegatingContextSelector(appContextSelector, def);
@@ -66,7 +67,7 @@ public class ZeroXCFABuilder extends SSAPropagationCallGraphBuilder {
    * @throws IllegalArgumentException if options is null
    * @throws IllegalArgumentException if xmlFiles == null
    */
-  public static SSAPropagationCallGraphBuilder make(AnalysisOptions options, AnalysisCache cache, IClassHierarchy cha,
+  public static SSAPropagationCallGraphBuilder make(AnalysisOptions options, IAnalysisCacheView cache, IClassHierarchy cha,
       ClassLoader cl, AnalysisScope scope, String[] xmlFiles, byte instancePolicy) throws IllegalArgumentException {
 
     if (xmlFiles == null) {
@@ -76,19 +77,19 @@ public class ZeroXCFABuilder extends SSAPropagationCallGraphBuilder {
       throw new IllegalArgumentException("options is null");
     }
     Util.addDefaultSelectors(options, cha);
-    for (int i = 0; i < xmlFiles.length; i++) {
-      Util.addBypassLogic(options, scope, cl, xmlFiles[i], cha);
+    for (String xmlFile : xmlFiles) {
+      Util.addBypassLogic(options, scope, cl, xmlFile, cha);
     }
 
-    return new ZeroXCFABuilder(cha, options, cache, null, null, instancePolicy);
+    return new ZeroXCFABuilder(Language.JAVA, cha, options, cache, null, null, instancePolicy);
   }
 
-  public static ZeroXCFABuilder make(IClassHierarchy cha, AnalysisOptions options, AnalysisCache cache,
+  public static ZeroXCFABuilder make(Language l, IClassHierarchy cha, AnalysisOptions options, IAnalysisCacheView cache,
       ContextSelector appContextSelector, SSAContextInterpreter appContextInterpreter, int instancePolicy) throws IllegalArgumentException {
     if (options == null) {
       throw new IllegalArgumentException("options == null");
     }
-    return new ZeroXCFABuilder(cha, options, cache, appContextSelector, appContextInterpreter, instancePolicy);
+    return new ZeroXCFABuilder(l, cha, options, cache, appContextSelector, appContextInterpreter, instancePolicy);
   }
 
 }

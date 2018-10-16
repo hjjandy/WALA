@@ -30,6 +30,7 @@ import com.ibm.wala.ipa.cha.IClassHierarchy;
 
 public class ChaPanel extends JSplitPane {
 
+  private static final long serialVersionUID = -9058908127737757320L;
   private final IClassHierarchy cha;
 
   public ChaPanel(IClassHierarchy cha) {
@@ -39,26 +40,25 @@ public class ChaPanel extends JSplitPane {
     JTree tree = buildTree();
     this.setLeftComponent(new JScrollPane(tree));
     
-    final DefaultListModel methodListModel = new DefaultListModel();
-    JList methodList = new JList(methodListModel);
+    final DefaultListModel<String> methodListModel = new DefaultListModel<>();
+    JList methodList = new JList<>(methodListModel);
     this.setRightComponent(methodList);
     
-    tree.addTreeSelectionListener(new TreeSelectionListener(){
+    tree.addTreeSelectionListener(new TreeSelectionListener() {
       @Override
       public void valueChanged(TreeSelectionEvent e) {
-        TreePath newLeadSelectionPath = e.getNewLeadSelectionPath();
-        if (null == newLeadSelectionPath){
-          return;
-        }
-        DefaultMutableTreeNode treeNode = (DefaultMutableTreeNode) newLeadSelectionPath.getLastPathComponent();
-        IClass klass = (IClass) treeNode.getUserObject();
-        methodListModel.clear();
-        for (IMethod m : klass.getDeclaredMethods()){
-          methodListModel.addElement(m.toString());
-        }
+      TreePath newLeadSelectionPath = e.getNewLeadSelectionPath();
+      if (null == newLeadSelectionPath){
+        return;
       }
-    });
-    
+      DefaultMutableTreeNode treeNode = (DefaultMutableTreeNode) newLeadSelectionPath.getLastPathComponent();
+      IClass klass = (IClass) treeNode.getUserObject();
+      methodListModel.clear();
+      for (IMethod m : klass.getDeclaredMethods()){
+        methodListModel.addElement(m.toString());
+      }
+    }   
+  });
   }
 
   private JTree buildTree() {

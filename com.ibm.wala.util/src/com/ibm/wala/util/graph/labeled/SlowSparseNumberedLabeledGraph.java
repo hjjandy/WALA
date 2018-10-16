@@ -48,8 +48,7 @@
  */
 package com.ibm.wala.util.graph.labeled;
 
-import java.util.Iterator;
-
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.graph.NumberedNodeManager;
 import com.ibm.wala.util.graph.impl.SlowNumberedNodeManager;
 
@@ -62,7 +61,7 @@ public class SlowSparseNumberedLabeledGraph<T, U> extends AbstractNumberedLabele
    * @return a graph with the same nodes and edges as g
    */
   public static <T,U> SlowSparseNumberedLabeledGraph<T,U> duplicate(LabeledGraph<T,U> g) {
-    SlowSparseNumberedLabeledGraph<T,U> result = new SlowSparseNumberedLabeledGraph<T,U>(g.getDefaultLabel());
+    SlowSparseNumberedLabeledGraph<T,U> result = new SlowSparseNumberedLabeledGraph<>(g.getDefaultLabel());
     copyInto(g, result);
     return result;
   }
@@ -71,13 +70,11 @@ public class SlowSparseNumberedLabeledGraph<T, U> extends AbstractNumberedLabele
     if (g == null) {
       throw new IllegalArgumentException("g is null");
     }
-    for (Iterator<? extends T> it = g.iterator(); it.hasNext();) {
-      into.addNode(it.next());
+    for (T name : g) {
+      into.addNode(name);
     }
-    for (Iterator<? extends T> it = g.iterator(); it.hasNext();) {
-      T n = it.next();
-      for (Iterator<? extends T> it2 = g.getSuccNodes(n); it2.hasNext();) {
-        T s = it2.next();
+    for (T n : g) {
+      for (T s : Iterator2Iterable.make(g.getSuccNodes(n))) {
         for(U l : g.getEdgeLabels(n, s)) {
           into.addEdge(n, s, l);
         }
@@ -93,8 +90,8 @@ public class SlowSparseNumberedLabeledGraph<T, U> extends AbstractNumberedLabele
     if (defaultLabel == null) {
       throw new IllegalArgumentException("null default label");
     }
-    nodeManager = new SlowNumberedNodeManager<T>();
-    edgeManager = new SparseNumberedLabeledEdgeManager<T, U>(nodeManager, defaultLabel);
+    nodeManager = new SlowNumberedNodeManager<>();
+    edgeManager = new SparseNumberedLabeledEdgeManager<>(nodeManager, defaultLabel);
   }
 
   @Override

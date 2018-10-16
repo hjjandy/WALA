@@ -15,6 +15,7 @@ import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.Context;
+import com.ibm.wala.ipa.callgraph.ContextKey;
 import com.ibm.wala.ipa.callgraph.ContextSelector;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ContainerUtil;
@@ -36,8 +37,8 @@ import com.ibm.wala.util.strings.Atom;
  * This context selector returns a context customized for the {@link InstanceKey} of the receiver if
  * <ul>
  * <li>receiver is a container, or</li>
- * was allocated in a node whose context was a {@link ReceiverInstanceContext}, and the type is interesting according to a delegate
- * {@link ZeroXInstanceKeys}
+ * <li>was allocated in a node whose context was a {@link ReceiverInstanceContext}, and the type is interesting according to a delegate
+ * {@link ZeroXInstanceKeys}</li>
  * </ul>
  * 
  * Additionally, we add one level of call string context to a few well-known static factory methods from the standard libraries.
@@ -112,7 +113,7 @@ public class ContainerContextSelector implements ContextSelector {
     if (keys != null && keys.length > 0 && keys[0] != null) {
       receiver = keys[0];
     }
-    if (mayUnderstand(caller, site, callee, receiver)) {
+    if (mayUnderstand(site, callee, receiver)) {
       if (DEBUG) {
         System.err.println("May Understand: " + callee + " recv " + receiver);
       }
@@ -232,21 +233,20 @@ public class ContainerContextSelector implements ContextSelector {
     if (DEBUG) {
       System.err.println("findNodeRecursiveMatchingContext " + m + " in context " + c);
     }
-    if (c instanceof ReceiverInstanceContext) {
-      ReceiverInstanceContext ric = (ReceiverInstanceContext) c;
-      if (!(ric.getReceiver() instanceof AllocationSiteInNode)) {
+    if (c.isA(ReceiverInstanceContext.class)) {
+      InstanceKey receiver = (InstanceKey) c.get(ContextKey.RECEIVER);
+      if (!(receiver instanceof AllocationSiteInNode)) {
         return null;
       }
-      AllocationSiteInNode i = (AllocationSiteInNode) ric.getReceiver();
+      AllocationSiteInNode i = (AllocationSiteInNode) receiver;
       CGNode n = i.getNode();
       if (n.getMethod().equals(m)) {
         return n;
       } else {
         return findNodeRecursiveMatchingContext(m, n.getContext());
       }
-    } else if (c instanceof CallerContext) {
-      CallerContext cc = (CallerContext) c;
-      CGNode n = cc.getCaller();
+    } else if (c.isA(CallerContext.class)) {
+      CGNode n = (CGNode) c.get(ContextKey.CALLER);
       if (n.getMethod().equals(m)) {
         return n;
       } else {
@@ -270,7 +270,7 @@ public class ContainerContextSelector implements ContextSelector {
     return (n == null) ? null : n.getContext();
   }
 
-  public boolean mayUnderstand(CGNode caller, CallSiteReference site, IMethod targetMethod, InstanceKey receiver) {
+  public boolean mayUnderstand(CallSiteReference site, IMethod targetMethod, InstanceKey receiver) {
     if (targetMethod == null) {
       throw new IllegalArgumentException("targetMethod is null");
     }
@@ -320,7 +320,7 @@ public class ContainerContextSelector implements ContextSelector {
       if (receiver instanceof AllocationSiteInNode) {
         AllocationSiteInNode I = (AllocationSiteInNode) receiver;
         CGNode N = I.getNode();
-        if (N.getContext() instanceof ReceiverInstanceContext) {
+        if (N.getContext().isA(ReceiverInstanceContext.class)) {
           return true;
         }
       }

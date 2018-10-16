@@ -12,15 +12,15 @@ package com.ibm.wala.viz;
 
 import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Iterator;
-
 import com.ibm.wala.util.WalaException;
 import com.ibm.wala.util.collections.Iterator2Collection;
-import com.ibm.wala.util.debug.Assertions;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.graph.Graph;
 
 /**
@@ -33,7 +33,16 @@ public class DotUtil {
    * 
    */
   public static enum DotOutputType {
-    PS, SVG, PDF, EPS
+    PS("ps"),
+    SVG("svg"),
+    PDF("pdf"),
+    EPS("eps");
+
+    public final String suffix;
+
+    DotOutputType(final String suffix) {
+      this.suffix = suffix;
+    }
   }
 
   private static DotOutputType outputType = DotOutputType.PDF;
@@ -51,19 +60,7 @@ public class DotUtil {
   }
 
   private static String outputTypeCmdLineParam() {
-    switch (outputType) {
-    case PS:
-      return "-Tps";
-    case EPS:
-      return "-Teps";
-    case SVG:
-      return "-Tsvg";
-    case PDF:
-      return "-Tpdf";
-    default:
-      Assertions.UNREACHABLE();
-      return null;
-    }
+    return "-T" + outputType.suffix;
   }
 
   /**
@@ -168,13 +165,13 @@ public class DotUtil {
     }
     try {
       File f = new File(dotfile);
-      FileWriter fw = new FileWriter(f);
-      fw.write(dotStringBuffer.toString());
-      fw.close();
+      try (Writer fw = Files.newBufferedWriter(f.toPath(), StandardCharsets.UTF_8)) {
+        fw.write(dotStringBuffer.toString());
+      }
       return f;
 
     } catch (Exception e) {
-      throw new WalaException("Error writing dot file " + dotfile);
+      throw new WalaException("Error writing dot file " + dotfile, e);
     }
   }
 
@@ -182,7 +179,7 @@ public class DotUtil {
    * @return StringBuffer holding dot output representing G
    * @throws WalaException
    */
-  private static <T> StringBuffer dotOutput(Graph<T> g, NodeDecorator<T> labels, String title) throws WalaException {
+  public static <T> StringBuffer dotOutput(Graph<T> g, NodeDecorator<T> labels, String title) throws WalaException {
     StringBuffer result = new StringBuffer("digraph \"DirectedGraph\" {\n");
 
     if (title != null) {
@@ -215,10 +212,8 @@ public class DotUtil {
 
     outputNodes(labels, result, dotNodes);
 
-    for (Iterator<? extends T> it = g.iterator(); it.hasNext();) {
-      T n = it.next();
-      for (Iterator<? extends T> it2 = g.getSuccNodes(n); it2.hasNext();) {
-        T s = it2.next();
+    for (T n : g) {
+      for (T s : Iterator2Iterable.make(g.getSuccNodes(n))) {
         result.append(" ");
         result.append(getPort(n, labels));
         result.append(" -> ");
@@ -232,8 +227,8 @@ public class DotUtil {
   }
 
   private static <T> void outputNodes(NodeDecorator<T> labels, StringBuffer result, Collection<T> dotNodes) throws WalaException {
-    for (Iterator<T> it = dotNodes.iterator(); it.hasNext();) {
-      outputNode(labels, result, it.next());
+    for (T t : dotNodes) {
+      outputNode(labels, result, t);
     }
   }
 
@@ -248,11 +243,11 @@ public class DotUtil {
   /**
    * Compute the nodes to visualize
    */
-  private static <T> Collection<T> computeDotNodes(Graph<T> g) throws WalaException {
+  private static <T> Collection<T> computeDotNodes(Graph<T> g) {
     return Iterator2Collection.toSet(g.iterator());
   }
 
-  private static String getRankDir() throws WalaException {
+  private static String getRankDir() {
     return null;
   }
 
@@ -262,7 +257,9 @@ public class DotUtil {
    */
   private static <T> String decorateNode(T n, NodeDecorator<T> d) throws WalaException {
     StringBuffer result = new StringBuffer();
-    result.append(" [ ]\n");
+    result.append(" [ label=\"");
+    result.append(getLabel(n, d));
+    result.append("\"]\n");
     return result.toString();
   }
 

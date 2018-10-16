@@ -22,6 +22,18 @@ public interface ContextKey {
   };
 
   /**
+   * A property of contexts that might be generally useful: the "target" method.
+   */
+  public final static ContextKey TARGET = new ContextKey() {
+  };
+
+  /**
+   * A property of contexts that might be generally useful: the "name".
+   */
+  public final static ContextKey NAME = new ContextKey() {
+  };
+
+  /**
    * A property of contexts that might be generally useful: the "call site" method ... used for call-string context schemes.
    */
   public final static ContextKey CALLSITE = new ContextKey() {
@@ -40,12 +52,16 @@ public interface ContextKey {
    * context key representing some parameter index, useful, e.g. for CPA-style
    * context-sensitivity policies.
    */
-  public static class ParameterKey implements ContextKey {
+  static class ParameterKey implements ContextKey {
     public final int index;
 
-    public ParameterKey(int index) {
-      super();
+    private ParameterKey(int index) {
       this.index = index;
+    }
+    
+    @Override
+    public String toString() {
+      return "P" + index;
     }
   }
   

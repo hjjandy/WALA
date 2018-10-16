@@ -10,7 +10,6 @@
  *******************************************************************************/
 package com.ibm.wala.util.intset;
 
-import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
 import java.util.TreeSet;
@@ -298,7 +297,7 @@ public class SparseLongSet implements LongSet {
   }
 
   /**
-   * Reverse of toString(): "{2,3}" -> [2,3]
+   * Reverse of toString(): "{2,3}" -&gt; [2,3]
    * 
    * @throws IllegalArgumentException if str is null
    */
@@ -317,14 +316,13 @@ public class SparseLongSet implements LongSet {
     StringTokenizer tok = new StringTokenizer(str, " ,");
 
     // XXX not very efficient:
-    TreeSet<Long> set = new TreeSet<Long>();
+    TreeSet<Long> set = new TreeSet<>();
     while (tok.hasMoreTokens()) {
       set.add(Long.decode(tok.nextToken()));
     }
     long[] result = new long[set.size()];
     int i = 0;
-    for (Iterator<Long> it = set.iterator(); it.hasNext();) {
-      Long L = it.next();
+    for (Long L : set) {
       result[i++] = L.longValue();
     }
     return result;

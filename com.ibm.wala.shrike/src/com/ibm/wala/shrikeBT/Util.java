@@ -19,7 +19,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 
 import com.ibm.wala.shrikeBT.IInvokeInstruction.Dispatch;
-import com.ibm.wala.shrikeCT.BootstrapMethodsReader.BootstrapMethod;
 import com.ibm.wala.util.collections.Pair;
 
 /**
@@ -169,8 +168,8 @@ public final class Util {
   }
 
   static {
-    typeAliases = new HashMap<String, String>();
-    classAliases = new HashMap<String, String>();
+    typeAliases = new HashMap<>();
+    classAliases = new HashMap<>();
     addAlias("void", "V");
     addAlias("int", "I");
     addAlias("long", "J");
@@ -206,7 +205,7 @@ public final class Util {
    * 
    * @throws IllegalArgumentException if type == null
    */
-  static int getParamsCount(String type) throws IllegalArgumentException {
+  public static int getParamsCount(String type) throws IllegalArgumentException {
     if (type == null || type.length() < 2) {
       throw new IllegalArgumentException("invalid type: " + type);
     }
@@ -220,7 +219,7 @@ public final class Util {
       }
       return count;
     } catch (StringIndexOutOfBoundsException e) {
-      throw new IllegalArgumentException("invalid type: " + type);
+      throw new IllegalArgumentException("invalid type: " + type, e);
     }
   }
 
@@ -373,8 +372,8 @@ public final class Util {
     }
     StringBuffer buf = new StringBuffer();
     buf.append("(");
-    for (int i = 0; i < params.length; i++) {
-      buf.append(makeType(params[i]));
+    for (Class<?> param : params) {
+      buf.append(makeType(param));
     }
     buf.append(")");
     buf.append(makeType(result));
@@ -448,8 +447,7 @@ public final class Util {
     }
     Method[] methods = c.getMethods();
     Method result = null;
-    for (int i = 0; i < methods.length; i++) {
-      Method m = methods[i];
+    for (Method m : methods) {
       if (m.getName().equals(name) && (paramTypes == null || Arrays.equals(m.getParameterTypes(), paramTypes))) {
         if (result != null) {
           throw new IllegalArgumentException("Method " + makeName(name, paramTypes) + " is ambiguous in class " + c);
@@ -474,8 +472,7 @@ public final class Util {
 
     if (name.equals("<init>")) {
       Constructor<?>[] cs = c.getConstructors();
-      for (int i = 0; i < cs.length; i++) {
-        Constructor<?> con = cs[i];
+      for (Constructor<?> con : cs) {
         if (paramTypes == null || Arrays.equals(con.getParameterTypes(), paramTypes)) {
           if (result != null) {
             throw new IllegalArgumentException("Constructor " + makeName(name, paramTypes) + " is ambiguous in class " + c);

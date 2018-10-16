@@ -1,19 +1,17 @@
-#include <jni.h>
-
-#include <iterator>
-
-#include <stdarg.h>
-#include <string.h>
 #include <CAstWrapper.h>
-
-#if defined(__MINGW32__) || defined(_MSC_VER) || defined(__APPLE__)
-#define strndup(s,n) strdup(s)
-#endif
+#include <cstring>
+#include <iterator>
+#include <jni.h>
+#include <sstream>
+#include <string>
 
 #define __SIG( __nm ) "L" __nm ";"
 
 #define __CTN "com/ibm/wala/cast/tree/CAst"
 #define __CTS __SIG(  __CTN )
+
+#define __CTI "com/ibm/wala/cast/tree/impl/CAstImpl"
+#define __CII __SIG(  __CTI )
 
 #define __CEN "com/ibm/wala/cast/tree/CAstEntity"
 #define __CES __SIG(  __CEN )
@@ -66,6 +64,11 @@ static const char *GlobalCls = XLATOR_PKG "AbstractGlobalEntity";
 CAstWrapper::CAstWrapper(JNIEnv *env, Exceptions &ex, jobject xlator) 
   : java_ex(ex), env(env), xlator(xlator)
 {
+  if (!initialized) {
+    initialized = true;
+    initialize(env);
+  }
+  
   this->CAstNode = env->FindClass( __CNN );
   this->CAstInterface = env->FindClass( __CTN );
   this->HashSet = env->FindClass("java/util/HashSet");
@@ -74,11 +77,15 @@ CAstWrapper::CAstWrapper(JNIEnv *env, Exceptions &ex, jobject xlator)
     env->FindClass("com/ibm/wala/cast/ir/translator/NativeBridge");
   this->NativeTranslatorToCAst =
     env->FindClass("com/ibm/wala/cast/ir/translator/NativeTranslatorToCAst");
+  THROW_ANY_EXCEPTION(java_ex);
 
   jfieldID castFieldID = env->GetFieldID(NativeBridge, "Ast", "Lcom/ibm/wala/cast/tree/CAst;");
+  THROW_ANY_EXCEPTION(java_ex);
   this->Ast = env->GetObjectField(xlator, castFieldID);
+  THROW_ANY_EXCEPTION(java_ex);
 
   jclass xlatorCls = env->FindClass( XlatorCls );
+  THROW_ANY_EXCEPTION(java_ex);
   this->_makeLocation = env->GetMethodID(xlatorCls, "makeLocation", "(IIII)Lcom/ibm/wala/cast/tree/CAstSourcePositionMap$Position;");
   THROW_ANY_EXCEPTION(java_ex);
 
@@ -206,21 +213,21 @@ CAstWrapper::CAstWrapper(JNIEnv *env, Exceptions &ex, jobject xlator)
   THROW_ANY_EXCEPTION(java_ex);
   this->_getEntityName = env->GetMethodID(castEntity, "getName", "()Ljava/lang/String;");
 
+  CAstType = env->FindClass("com/ibm/wala/cast/tree/CAstType");
   CAstSymbol = env->FindClass("com/ibm/wala/cast/tree/impl/CAstSymbolImpl");
   THROW_ANY_EXCEPTION(java_ex);
   this->castSymbolInit1 = 
-    env->GetMethodID(CAstSymbol, "<init>", "(Ljava/lang/String;)V");
+    env->GetMethodID(CAstSymbol, "<init>", "(Ljava/lang/String;Lcom/ibm/wala/cast/tree/CAstType;)V");
   THROW_ANY_EXCEPTION(java_ex);
   this->castSymbolInit2 = 
-    env->GetMethodID(CAstSymbol, "<init>", "(Ljava/lang/String;Z)V");
+    env->GetMethodID(CAstSymbol, "<init>", "(Ljava/lang/String;Lcom/ibm/wala/cast/tree/CAstType;Z)V");
   THROW_ANY_EXCEPTION(java_ex);
   this->castSymbolInit3 = 
-    env->GetMethodID(CAstSymbol, "<init>", "(Ljava/lang/String;ZZ)V");
+    env->GetMethodID(CAstSymbol, "<init>", "(Ljava/lang/String;Lcom/ibm/wala/cast/tree/CAstType;ZZ)V");
   THROW_ANY_EXCEPTION(java_ex);
   this->castSymbolInit4 = 
-    env->GetMethodID(CAstSymbol, "<init>", "(Ljava/lang/String;ZZLjava/lang/Object;)V");
+    env->GetMethodID(CAstSymbol, "<init>", "(Ljava/lang/String;Lcom/ibm/wala/cast/tree/CAstType;ZZLjava/lang/Object;)V");
   THROW_ANY_EXCEPTION(java_ex);
-
 }
 
 #define _CPP_CONSTANTS 
@@ -252,16 +259,13 @@ void CAstWrapper::assertIsCAstNode(jobject obj, int n) {
     jstring jclsstr = (jstring)env->CallObjectMethod(cls, toString);
     const char *cclsstr = env->GetStringUTFChars(jclsstr, NULL);
 
-#if defined(_MSC_VER)
-	char* buf = (char*)_alloca(strlen(cstr) + strlen(cclsstr) + 100);
-#else
-    char buf[ strlen(cstr) + strlen(cclsstr) + 100 ];
-#endif
-    sprintf(buf, "argument %d (%s of type %s) is not a CAstNode\n", n, cstr, cclsstr); 
+    ostringstream formatter;
+    formatter << "argument " << n << " (" << cstr << " of type " << cclsstr << ") is not a CAstNode\n";
+    const string message = formatter.str();
 
     env->ReleaseStringUTFChars(jstr, cstr);
     env->ReleaseStringUTFChars(jclsstr, cclsstr);
-    THROW(java_ex, buf);
+    THROW(java_ex, message.c_str());
   }
 }
   
@@ -405,14 +409,12 @@ jobject CAstWrapper::makeConstant(jobject val) {
   return r;
 }
 
-jobject CAstWrapper::makeConstant(const char *strData) {
-  return makeConstant(strData, strlen(strData));
+jobject CAstWrapper::makeConstant(const char *strData, int strLen) {
+  return makeConstant(string(strData, strLen).c_str());
 }
 
-jobject CAstWrapper::makeConstant(const char *strData, int strLen) {
-  char *safeData = strndup(strData, strLen);
-  jobject val = env->NewStringUTF( safeData );
-  delete safeData;
+jobject CAstWrapper::makeConstant(const char *strData) {
+  jobject val = env->NewStringUTF( strData );
   jobject r = env->CallObjectMethod(Ast, makeObject, val);
   THROW_ANY_EXCEPTION(java_ex);
   LOG(r);
@@ -576,9 +578,7 @@ const char *CAstWrapper::getEntityName(jobject entity) {
 }
 
 jobject CAstWrapper::makeSymbol(const char *name) {
-  char *safeName = strndup(name, strlen(name)+1);
-  jobject val = env->NewStringUTF( safeName );
-  delete safeName;
+  jobject val = env->NewStringUTF( name );
 
   jobject s = env->NewObject(CAstSymbol, castSymbolInit1, val);
   THROW_ANY_EXCEPTION(java_ex);
@@ -588,9 +588,7 @@ jobject CAstWrapper::makeSymbol(const char *name) {
 }
 
 jobject CAstWrapper::makeSymbol(const char *name, bool isFinal) {
-  char *safeName = strndup(name, strlen(name)+1);
-  jobject val = env->NewStringUTF( safeName );
-  delete safeName;
+  jobject val = env->NewStringUTF( name );
 
   THROW_ANY_EXCEPTION(java_ex);
 
@@ -602,9 +600,7 @@ jobject CAstWrapper::makeSymbol(const char *name, bool isFinal) {
 jobject 
   CAstWrapper::makeSymbol(const char *name, bool isFinal, bool isCaseInsensitive) 
 {
-  char *safeName = strndup(name, strlen(name)+1);
-  jobject val = env->NewStringUTF( safeName );
-  delete safeName;
+  jobject val = env->NewStringUTF( name );
 
   jobject s = env->NewObject(CAstSymbol, castSymbolInit3, val, isFinal, isCaseInsensitive);
   THROW_ANY_EXCEPTION(java_ex);
@@ -619,9 +615,7 @@ jobject
 			  bool isCaseInsensitive, 
 			  jobject defaultValue) 
 {
-  char *safeName = strndup(name, strlen(name)+1);
-  jobject val = env->NewStringUTF( safeName );
-  delete safeName;
+  jobject val = env->NewStringUTF( name );
 
   jobject s = env->NewObject(CAstSymbol, castSymbolInit4, val, isFinal, isCaseInsensitive, defaultValue);
   THROW_ANY_EXCEPTION(java_ex);
@@ -691,10 +685,8 @@ jobject CAstWrapper::makeClassEntity(jobject classType) {
 }
 
 jobject CAstWrapper::makeGlobalEntity(char *name, jobject type, list<jobject> *modifiers) {
-  char *safeData = strdup(name);
-  jobject val = env->NewStringUTF( safeData );
+  jobject val = env->NewStringUTF( name );
   THROW_ANY_EXCEPTION(java_ex);
-  delete safeData;
 
   jobject entity = env->NewObject(NativeGlobalEntity, globalEntityInit, val, type, makeSet(modifiers));
   THROW_ANY_EXCEPTION(java_ex);

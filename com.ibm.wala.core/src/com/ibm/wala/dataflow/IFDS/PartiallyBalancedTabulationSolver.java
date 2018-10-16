@@ -11,10 +11,9 @@
 package com.ibm.wala.dataflow.IFDS;
 
 import java.util.Collection;
-import java.util.Iterator;
-
 import com.ibm.wala.util.MonitorUtil.IProgressMonitor;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.debug.Assertions;
 import com.ibm.wala.util.intset.IntIterator;
@@ -22,8 +21,8 @@ import com.ibm.wala.util.intset.IntSet;
 
 /**
  * Utilities for dealing with tabulation with partially balanced parentheses.
- * 
- * @param <T> type of node in the supergraph 
+ *
+ * @param <T> type of node in the supergraph
  * @param <P> type of a procedure (like a box in an RSM)
  * @param <F> type of factoids propagated when solving this problem
  */
@@ -31,7 +30,7 @@ public class PartiallyBalancedTabulationSolver<T, P, F> extends TabulationSolver
 
   public static <T, P, F> PartiallyBalancedTabulationSolver<T, P, F> createPartiallyBalancedTabulationSolver(
       PartiallyBalancedTabulationProblem<T, P, F> p, IProgressMonitor monitor) {
-    return new PartiallyBalancedTabulationSolver<T, P, F>(p, monitor);
+    return new PartiallyBalancedTabulationSolver<>(p, monitor);
   }
 
   private final Collection<Pair<T,Integer>> unbalancedSeeds = HashSetFactory.make();
@@ -46,8 +45,7 @@ public class PartiallyBalancedTabulationSolver<T, P, F> extends TabulationSolver
     if (result && wasUsedAsUnbalancedSeed(s_p, i) && supergraph.isExit(n)) {
       // j was reached from an entry seed. if there are any facts which are reachable from j, even without
       // balanced parentheses, we can use these as new seeds.
-      for (Iterator<? extends T> it2 = supergraph.getSuccNodes(n); it2.hasNext();) {
-        T retSite = it2.next();
+      for (T retSite : Iterator2Iterable.make(supergraph.getSuccNodes(n))) {
         PartiallyBalancedTabulationProblem<T, P, F> problem = (PartiallyBalancedTabulationProblem<T, P, F>) getProblem();
         IFlowFunction f = problem.getFunctionMap().getUnbalancedReturnFlowFunction(n, retSite);
         // for each fact that can be reached by the return flow ...
@@ -61,6 +59,7 @@ public class PartiallyBalancedTabulationSolver<T, P, F> extends TabulationSolver
               T fakeEntry = problem.getFakeEntry(retSite);
               PathEdge<T> seed = PathEdge.createPathEdge(fakeEntry, d3, retSite, d3);
               addSeed(seed);
+              newUnbalancedExplodedReturnEdge(s_p,  i, n, j);
             }
           }
         } else {
@@ -87,5 +86,15 @@ public class PartiallyBalancedTabulationSolver<T, P, F> extends TabulationSolver
    */
   private boolean wasUsedAsUnbalancedSeed(T s_p, int i) {
    return unbalancedSeeds.contains(Pair.make(s_p, i));
+  }
+
+  /**
+   * A path edge &lt;s_p, i&gt; -&gt; &lt;n, j&gt; was propagated, and &lt;s_p, i&gt; was an unbalanced seed.
+   * So, we added a new seed callerSeed (to some return site) in the caller.  To be overridden
+   * in subclasses.
+   */
+  @SuppressWarnings("unused")
+  protected void newUnbalancedExplodedReturnEdge(T s_p, int i, T n, int j) {
+
   }
 }

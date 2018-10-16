@@ -48,7 +48,7 @@ public class FormalTypeParameter extends Signature {
     interfaceBounds = parseForInterfaceBounds(s);
   }
 
-  private TypeSignature parseForClassBound(String s) {
+  private static TypeSignature parseForClassBound(String s) {
     int start = s.indexOf(':');
     if (start == s.length() - 1) {
       return null;
@@ -64,8 +64,8 @@ public class FormalTypeParameter extends Signature {
     }
   }
 
-  private TypeSignature[] parseForInterfaceBounds(String s) {
-    List<TypeSignature> list = new LinkedList<TypeSignature>();
+  private static TypeSignature[] parseForInterfaceBounds(String s) {
+    List<TypeSignature> list = new LinkedList<>();
 
     int start = s.indexOf(':');
     if (start == s.length() - 1) {
@@ -85,7 +85,7 @@ public class FormalTypeParameter extends Signature {
     return list.toArray(result);
   }
 
-  private String parseForId(String s) throws IllegalArgumentException {
+  private static String parseForId(String s) throws IllegalArgumentException {
     if (s.indexOf(':') == -1) {
       throw new IllegalArgumentException(s);
     }
@@ -143,7 +143,7 @@ public class FormalTypeParameter extends Signature {
   }
 
   static String[] parseForFormalTypeParameters(String s) {
-    ArrayList<String> sigs = new ArrayList<String>(10);
+    ArrayList<String> sigs = new ArrayList<>(10);
 
     int beginToken = 1;
     while (s.charAt(beginToken) != '>') {

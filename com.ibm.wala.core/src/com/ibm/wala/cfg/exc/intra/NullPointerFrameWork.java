@@ -26,15 +26,15 @@ import com.ibm.wala.util.intset.IntPair;
  * functions are not distribute (similar to constant propagation). Therefore we remove 
  * back edges in the flow graph.
  * 
- * @author Juergen Graf <graf@kit.edu>
+ * @author Juergen Graf &lt;graf@kit.edu&gt;
  *
  */
-class NullPointerFrameWork<T extends ISSABasicBlock> implements IKilldallFramework<T, NullPointerState> {
+public class NullPointerFrameWork<T extends ISSABasicBlock> implements IKilldallFramework<T, NullPointerState> {
 
   private final Graph<T> flow;
   private final NullPointerTransferFunctionProvider<T> transferFunct;
   
-  NullPointerFrameWork(ControlFlowGraph<SSAInstruction, T> cfg, IR ir) {
+  public NullPointerFrameWork(ControlFlowGraph<SSAInstruction, T> cfg, IR ir) {
     final IBinaryNaturalRelation backEdges = Acyclic.computeBackEdges(cfg, cfg.entry());
     boolean hasBackEdge = backEdges.iterator().hasNext();
     if (hasBackEdge) {
@@ -52,7 +52,7 @@ class NullPointerFrameWork<T extends ISSABasicBlock> implements IKilldallFramewo
       this.flow = cfg;
     }
 
-    this.transferFunct = new NullPointerTransferFunctionProvider<T>(cfg, ir);
+    this.transferFunct = new NullPointerTransferFunctionProvider<>(cfg, ir);
   }
   
   /* (non-Javadoc)

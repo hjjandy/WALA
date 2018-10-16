@@ -37,20 +37,21 @@
  */
 package com.ibm.wala.util.collections;
 
+import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.lang.reflect.Field;
+import java.nio.charset.StandardCharsets;
 import java.security.Permission;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
-
-import com.ibm.wala.util.Predicate;
-import com.ibm.wala.util.functions.Function;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Miscellaneous utility functions.
@@ -71,9 +72,9 @@ public class Util {
     }
     // create a memory buffer to which to dump the trace
     ByteArrayOutputStream traceDump = new ByteArrayOutputStream();
-    PrintWriter w = new PrintWriter(traceDump);
-    thrown.printStackTrace(w);
-    w.close();
+    try (final PrintWriter w = new PrintWriter(new BufferedWriter(new OutputStreamWriter(traceDump, StandardCharsets.UTF_8)))) {
+      thrown.printStackTrace(w);
+    }
     return traceDump.toString();
   }
   
@@ -116,8 +117,7 @@ public class Util {
     if (c == null) {
       throw new IllegalArgumentException("c == null");
     }
-    for (Iterator<T> iter = c.iterator(); iter.hasNext();) {
-      T obj = iter.next();
+    for (T obj : c) {
       if (p.test(obj))
         return obj;
     }
@@ -149,8 +149,8 @@ public class Util {
     if (c == null) {
       throw new IllegalArgumentException("c == null");
     }
-    for (Iterator<T> iter = c.iterator(); iter.hasNext();)
-      v.visit(iter.next());
+    for (T t : c)
+      v.visit(t);
   }
 
   /**
@@ -164,9 +164,9 @@ public class Util {
     if (srcList == null) {
       throw new IllegalArgumentException("srcList == null");
     }
-    ArrayList<U> result = new ArrayList<U>();
-    for (Iterator<T> srcIter = srcList.iterator(); srcIter.hasNext();) {
-      result.add(f.apply(srcIter.next()));
+    ArrayList<U> result = new ArrayList<>();
+    for (T t : srcList) {
+      result.add(f.apply(t));
     }
     return result;
   }
@@ -183,8 +183,8 @@ public class Util {
       throw new IllegalArgumentException("srcSet == null");
     }
     HashSet<U> result = HashSetFactory.make();
-    for (Iterator<T> srcIter = srcSet.iterator(); srcIter.hasNext();) {
-      result.add(f.apply(srcIter.next()));
+    for (T t : srcSet) {
+      result.add(f.apply(t));
     }
     return result;
   }
@@ -281,12 +281,7 @@ public class Util {
    * @return <code>true</code> if the sets intersect; <code>false</code> otherwise
    */
   public static <T> boolean intersecting(final Set<T> s1, final Set<T> s2) {
-    return forSome(s1, new Predicate<T>() {
-      @Override
-      public boolean test(T obj) {
-        return s2.contains(obj);
-      }
-    });
+    return forSome(s1, s2::contains);
   }
 
   /**

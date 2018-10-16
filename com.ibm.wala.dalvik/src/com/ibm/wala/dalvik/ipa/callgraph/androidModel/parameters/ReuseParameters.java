@@ -42,7 +42,6 @@ package com.ibm.wala.dalvik.ipa.callgraph.androidModel.parameters;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Logger;
 
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.dalvik.ipa.callgraph.androidModel.AndroidModel;
@@ -76,7 +75,7 @@ import com.ibm.wala.util.strings.Atom;
  *  @see    com.ibm.wala.dalvik.ipa.callgraph.androidModel.parameters.IInstantiationBehavior
  *  @see    com.ibm.wala.util.ssa.ParameterAccessor 
  *  
- *  @author Tobias Blaschke <code@tobiasblaschke.de>
+ *  @author Tobias Blaschke &lt;code@tobiasblaschke.de&gt;
  *  @since  2013-11-02
  */
 public class ReuseParameters {
@@ -115,7 +114,7 @@ public class ReuseParameters {
      */
     public void collectParameters(final Iterable<? extends Entrypoint> entrypoints) {
 //        int paramsToModel = firstParamSSA();
-        this.reuseParameters = new ArrayList<TypeName>();
+        this.reuseParameters = new ArrayList<>();
 
         for (final Entrypoint ep : entrypoints) {
             final int paramCount = ep.getNumberOfParameters();
@@ -128,8 +127,8 @@ public class ReuseParameters {
                     }
                     
                     // Assert the rest of the types have the same name
-                    for (int j = 0; j < types.length; ++j) {
-                        final TypeName paramType = types[j].getName();
+                    for (TypeReference type : types) {
+                        final TypeName paramType = type.getName();
 
                         if (isReuse(paramType, ALL_TARGETS)) {
                             if (! reuseParameters.contains(paramType)) {    // XXX: Why not use a Set?
@@ -148,7 +147,7 @@ public class ReuseParameters {
      *
      *  @see    com.ibm.wala.util.ssa.ParameterAccessor
      */
-    private int ssaFor(IMethod inCallTo, int paramNo) {
+    private static int ssaFor(IMethod inCallTo, int paramNo) {
         assert (paramNo >= 0);
         assert (paramNo < inCallTo.getNumberOfParameters());
 
@@ -164,7 +163,7 @@ public class ReuseParameters {
      *
      *  @see    com.ibm.wala.util.ssa.ParameterAccessor
      */
-    private int firstOf(TypeName type, IMethod inCallTo) {
+    private static int firstOf(TypeName type, IMethod inCallTo) {
         for (int i = 0; i < inCallTo.getNumberOfParameters(); ++i) {
             if (inCallTo.getParameterType(i).getName().equals(type)) {
                 return i;

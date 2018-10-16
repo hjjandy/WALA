@@ -27,7 +27,7 @@ import java.util.LinkedList;
  * @see CRTData
  * @see CRTFlags
  * @author Siegfried Weber
- * @author Juergen Graf <juergen.graf@gmail.com>
+ * @author Juergen Graf &lt;juergen.graf@gmail.com&gt;
  */
 public final class CRTable extends PositionsAttribute {
 
@@ -72,7 +72,7 @@ public final class CRTable extends PositionsAttribute {
       } catch (InvalidCRTDataException e) {
         LinkedList<Object> l = e.getData();
         if (l == null)
-          l = new LinkedList<Object>();
+          l = new LinkedList<>();
         l.addFirst(i);
         Debug.warn(e.getMessage(), l.toArray());
       }

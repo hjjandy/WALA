@@ -12,6 +12,8 @@ package com.ibm.wala.util.graph;
 
 import java.util.Iterator;
 
+import com.ibm.wala.util.collections.Iterator2Iterable;
+
 /**
  * Basic functionality for a {@link Graph} that delegates node and edge management.
  */
@@ -182,15 +184,17 @@ public abstract class AbstractGraph<T> implements Graph<T> {
     getNodeManager().removeNode(n);
   }
 
+  @SuppressWarnings("unused")
+  protected String edgeString(T from, T to) {
+    return " --> ";
+  }
   @Override
   public String toString() {
     StringBuffer sb = new StringBuffer();
-    for (Iterator<? extends T> ns = iterator(); ns.hasNext();) {
-      T n = ns.next();
+    for (T n : this) {
       sb.append(n.toString()).append("\n");
-      for (Iterator<?> ss = getSuccNodes(n); ss.hasNext();) {
-        Object s = ss.next();
-        sb.append("  --> ").append(s);
+      for (T s : Iterator2Iterable.make(getSuccNodes(n))) {
+        sb.append(edgeString(n, s)).append(s);
         sb.append("\n");
       }
       sb.append("\n");

@@ -20,7 +20,19 @@ import java.util.Collections;
 
 import com.ibm.wala.analysis.typeInference.JavaPrimitiveType;
 import com.ibm.wala.analysis.typeInference.PrimitiveType;
+import com.ibm.wala.ipa.callgraph.AnalysisOptions;
+import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.IAnalysisCacheView;
+import com.ibm.wala.ipa.callgraph.impl.AbstractRootMethod;
+import com.ibm.wala.ipa.callgraph.impl.FakeRootClass;
+import com.ibm.wala.ipa.callgraph.impl.FakeRootMethod;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.ipa.modref.ExtendedHeapModel;
+import com.ibm.wala.ipa.modref.ModRef.ModVisitor;
+import com.ibm.wala.ipa.modref.ModRef.RefVisitor;
 import com.ibm.wala.shrikeBT.ConstantInstruction;
 import com.ibm.wala.shrikeBT.ConstantInstruction.ClassToken;
 import com.ibm.wala.shrikeBT.Constants;
@@ -35,6 +47,7 @@ import com.ibm.wala.shrikeCT.BootstrapMethodsReader.BootstrapMethod;
 import com.ibm.wala.shrikeCT.ConstantPoolParser.ReferenceToken;
 import com.ibm.wala.shrikeCT.InvalidClassFileException;
 import com.ibm.wala.ssa.SSAAbstractBinaryInstruction;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAAddressOfInstruction;
 import com.ibm.wala.ssa.SSAArrayLengthInstruction;
 import com.ibm.wala.ssa.SSAArrayLoadInstruction;
@@ -229,7 +242,7 @@ public class JavaLanguage extends LanguageImpl implements BytecodeLanguage, Cons
     }
 
     @Override
-    public SSAInvokeInstruction InvokeInstruction(int iindex, int result, int[] params, int exception, CallSiteReference site, BootstrapMethod bootstrap) {
+    public SSAAbstractInvokeInstruction InvokeInstruction(int iindex, int result, int[] params, int exception, CallSiteReference site, BootstrapMethod bootstrap) {
       if (bootstrap != null) {
         return new SSAInvokeDynamicInstruction(iindex, result, params, exception, site, bootstrap) {
           @Override
@@ -423,6 +436,9 @@ public class JavaLanguage extends LanguageImpl implements BytecodeLanguage, Cons
   private static final Collection<TypeReference> newArrayExceptions = Collections.unmodifiableCollection(Arrays
       .asList(new TypeReference[] { TypeReference.JavaLangOutOfMemoryError, TypeReference.JavaLangNegativeArraySizeException }));
 
+  private static final Collection<TypeReference> newSafeArrayExceptions = Collections.unmodifiableCollection(Arrays
+      .asList(new TypeReference[] { TypeReference.JavaLangOutOfMemoryError}));
+
   private static final Collection<TypeReference> exceptionInInitializerError = Collections
       .singleton(TypeReference.JavaLangExceptionInInitializerError);
 
@@ -464,7 +480,9 @@ public class JavaLanguage extends LanguageImpl implements BytecodeLanguage, Cons
   public static Collection<TypeReference> getNewArrayExceptions() {
     return newArrayExceptions;
   }
-
+  public static Collection<TypeReference> getNewSafeArrayExceptions() {
+    return newSafeArrayExceptions;
+  }
   public static Collection<TypeReference> getNewScalarExceptions() {
     return newScalarExceptions;
   }
@@ -541,7 +559,7 @@ public class JavaLanguage extends LanguageImpl implements BytecodeLanguage, Cons
   }
 
   /**
-   * @return Collection<TypeReference>, set of exception types a call to a declared target might throw.
+   * @return {@link Collection}&lt;{@link TypeReference}&gt;, set of exception types a call to a declared target might throw.
    * @throws InvalidClassFileException
    * @throws IllegalArgumentException if target is null
    * @throws IllegalArgumentException if cha is null
@@ -556,7 +574,7 @@ public class JavaLanguage extends LanguageImpl implements BytecodeLanguage, Cons
     if (target == null) {
       throw new IllegalArgumentException("target is null");
     }
-    ArrayList<TypeReference> set = new ArrayList<TypeReference>(cha.getJavaLangRuntimeExceptionTypes());
+    ArrayList<TypeReference> set = new ArrayList<>(cha.getJavaLangRuntimeExceptionTypes());
     set.addAll(cha.getJavaLangErrorTypes());
 
     IClass klass = cha.lookupClass(target.getDeclaringClass());
@@ -754,4 +772,27 @@ public class JavaLanguage extends LanguageImpl implements BytecodeLanguage, Cons
     return MethodReference.findOrCreate(this, loader, instruction.getClassType(), instruction.getMethodName(),
         instruction.getMethodSignature());
   }
+
+  @Override
+  public boolean methodsHaveDeclaredParameterTypes() {
+    return true;
+  }
+
+  @Override
+  public AbstractRootMethod getFakeRootMethod(IClassHierarchy cha, AnalysisOptions options, IAnalysisCacheView cache) {
+    return new FakeRootMethod(new FakeRootClass(ClassLoaderReference.Primordial, cha), options, cache); 
+  }
+
+  @Override
+  public <T extends InstanceKey> RefVisitor<T, ? extends ExtendedHeapModel> makeRefVisitor(CGNode n, Collection<PointerKey> result,
+      PointerAnalysis<T> pa, ExtendedHeapModel h) {
+    return new RefVisitor<>(n, result, pa, h);
+  }
+
+  @Override
+  public <T extends InstanceKey> ModVisitor<T, ? extends ExtendedHeapModel> makeModVisitor(CGNode n, Collection<PointerKey> result,
+      PointerAnalysis<T> pa, ExtendedHeapModel h, boolean ignoreAllocHeapDefs) {
+    return new ModVisitor<>(n, result, h, pa, ignoreAllocHeapDefs);
+  }
+
 }

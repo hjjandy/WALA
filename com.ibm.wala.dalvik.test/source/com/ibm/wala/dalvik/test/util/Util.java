@@ -4,8 +4,6 @@ import static com.ibm.wala.properties.WalaProperties.ANDROID_RT_DEX_DIR;
 import static com.ibm.wala.properties.WalaProperties.ANDROID_RT_JAVA_JAR;
 
 import java.io.File;
-import java.io.FileFilter;
-import java.io.FilenameFilter;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -19,8 +17,8 @@ import com.ibm.wala.classLoader.NestedJarFileModule;
 import com.ibm.wala.core.tests.callGraph.CallGraphTestUtil;
 import com.ibm.wala.dalvik.util.AndroidAnalysisScope;
 import com.ibm.wala.ipa.callgraph.AnalysisScope;
-import com.ibm.wala.ipa.cha.ClassHierarchy;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
+import com.ibm.wala.ipa.cha.ClassHierarchyFactory;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.properties.WalaProperties;
 import com.ibm.wala.types.ClassLoaderReference;
@@ -75,26 +73,22 @@ public class Util {
   }
   
   public static URI[] androidLibs() {
-    List<URI> libs = new ArrayList<URI>();
-    if (walaProperties != null && walaProperties.getProperty(ANDROID_RT_DEX_DIR) != null) {
-      for(File lib : new File(walaProperties.getProperty(ANDROID_RT_DEX_DIR)).listFiles(new FilenameFilter() {
-        @Override
-        public boolean accept(File dir, String name) {
-          return name.endsWith("dex") || name.endsWith("jar") || name.endsWith("apk");
-        } 
-      })) {
+    List<URI> libs = new ArrayList<>();
+    if (System.getenv("ANDROID_BOOT_OAT") != null) {
+      libs.add(new File(System.getenv("ANDROID_CORE_OAT")).toURI());
+      libs.add(new File(System.getenv("ANDROID_BOOT_OAT")).toURI());
+   
+    } else if (walaProperties != null && walaProperties.getProperty(ANDROID_RT_DEX_DIR) != null) {
+      for(File lib : new File(walaProperties.getProperty(ANDROID_RT_DEX_DIR)).listFiles((dir, name) -> name.startsWith("boot") && name.endsWith("oat"))) {
         libs.add(lib.toURI());
       }
     } else {
       assert "Dalvik".equals(System.getProperty("java.vm.name"));
-      for(File f : new File("/system/framework/").listFiles(new FileFilter() {
-        @Override
-        public boolean accept(File pathname) {
-          String name = pathname.getName();
-          return 
-              (name.startsWith("core") || name.startsWith("framework")) && 
-              (name.endsWith("jar") || name.endsWith("apk"));
-        } 
+      for(File f : new File("/system/framework/").listFiles(pathname -> {
+        String name = pathname.getName();
+        return 
+            (name.startsWith("core") || name.startsWith("framework")) && 
+            (name.endsWith("jar") || name.endsWith("apk"));
       })) 
       {
         System.out.println("adding " + f);
@@ -132,7 +126,7 @@ public class Util {
     TemporaryFile.urlToFile(F, (new FileProvider()).getResource("com.ibm.wala.core.testdata_1.0.0a.jar"));
     File androidDex = convertJarToDex(F.getAbsolutePath());
     AnalysisScope dalvikScope = makeDalvikScope(null, null, androidDex.getAbsolutePath());
-    return ClassHierarchy.make(dalvikScope);    
+    return ClassHierarchyFactory.make(dalvikScope);    
   }
 
 }

@@ -15,8 +15,8 @@ import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.Context;
-import com.ibm.wala.ipa.callgraph.DelegatingContext;
 import com.ibm.wala.ipa.callgraph.ContextSelector;
+import com.ibm.wala.ipa.callgraph.DelegatingContext;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.util.intset.IntSet;
 
@@ -31,7 +31,7 @@ import com.ibm.wala.util.intset.IntSet;
  *
  *  @see com.ibm.wala.ipa.callgraph.impl.DelegatingContextSelector
  *
- *  @author  Tobias Blaschke <code@tobiasblaschke.de>
+ *  @author  Tobias Blaschke &lt;code@tobiasblaschke.de&gt;
  */
 public class UnionContextSelector implements ContextSelector {
     private final ContextSelector A;

@@ -94,8 +94,8 @@ public class SimpleVector<T> implements IVector<T> {
    */
   private double computeOccupancy() {
     int count = 0;
-    for (int i = 0; i < store.length; i++) {
-      if (store[i] != null) {
+    for (Object element : store) {
+      if (element != null) {
         count++;
       }
     }
@@ -106,7 +106,7 @@ public class SimpleVector<T> implements IVector<T> {
   @Override
   @SuppressWarnings("unchecked")
   public Iterator<T> iterator() {
-    ArrayList<T> result = new ArrayList<T>();
+    ArrayList<T> result = new ArrayList<>();
     for (int i =0; i <= maxIndex; i++) {
       result.add((T) store[i]);
     }

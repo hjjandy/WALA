@@ -10,8 +10,6 @@
  *******************************************************************************/
 package com.ibm.wala.analysis.stackMachine;
 
-import java.util.Iterator;
-
 import com.ibm.wala.cfg.ShrikeCFG;
 import com.ibm.wala.cfg.ShrikeCFG.BasicBlock;
 import com.ibm.wala.dataflow.graph.AbstractMeetOperator;
@@ -54,6 +52,8 @@ import com.ibm.wala.types.ClassLoaderReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.CancelRuntimeException;
+import com.ibm.wala.util.collections.Iterator2Iterable;
+import com.ibm.wala.util.graph.INodeWithNumber;
 import com.ibm.wala.util.shrike.ShrikeUtil;
 
 /**
@@ -186,7 +186,7 @@ public abstract class AbstractIntStackMachine implements FixedPointConstants {
       }
     };
 
-    IKilldallFramework<BasicBlock, MachineState> problem = new BasicFramework<BasicBlock, MachineState>(cfg, xferFunctions);
+    IKilldallFramework<BasicBlock, MachineState> problem = new BasicFramework<>(cfg, xferFunctions);
     solver = new DataflowSolver<BasicBlock, MachineState>(problem) {
       private MachineState entry;
 
@@ -215,9 +215,8 @@ public abstract class AbstractIntStackMachine implements FixedPointConstants {
         /*
          * Add only the entry variable to the work list.
          */
-        for (Iterator it = getFixedPointSystem().getStatementsThatUse(entry); it.hasNext();) {
-          AbstractStatement s = (AbstractStatement) it.next();
-          addToWorkList(s);
+        for (INodeWithNumber s : Iterator2Iterable.make(getFixedPointSystem().getStatementsThatUse(entry))) {
+          addToWorkList((AbstractStatement) s);
         }
       }
 
@@ -346,7 +345,7 @@ public abstract class AbstractIntStackMachine implements FixedPointConstants {
    * @param bb the basic block at whose entry the meet occurs
    * @return true if the lhs value changes. false otherwise.
    */
-  private boolean meet(IVariable lhs, IVariable[] rhs, BasicBlock bb, Meeter meeter) {
+  private static boolean meet(IVariable lhs, IVariable[] rhs, BasicBlock bb, Meeter meeter) {
 
     boolean changed = meetStacks(lhs, rhs, bb, meeter);
 
@@ -362,7 +361,7 @@ public abstract class AbstractIntStackMachine implements FixedPointConstants {
    * @param bb the basic block at whose entry the meet occurs
    * @return true if the lhs value changes. false otherwise.
    */
-  private boolean meetForCatchBlock(IVariable lhs, IVariable[] rhs, BasicBlock bb, Meeter meeter) {
+  private static boolean meetForCatchBlock(IVariable lhs, IVariable[] rhs, BasicBlock bb, Meeter meeter) {
 
     boolean changed = meetStacksAtCatchBlock(lhs, bb, meeter);
     changed |= meetLocals(lhs, rhs, bb, meeter);
@@ -377,7 +376,7 @@ public abstract class AbstractIntStackMachine implements FixedPointConstants {
    * @param bb the basic block at whose entry the meet occurs
    * @return true if the lhs value changes. false otherwise.
    */
-  private boolean meetStacksAtCatchBlock(IVariable lhs, BasicBlock bb, Meeter meeter) {
+  private static boolean meetStacksAtCatchBlock(IVariable lhs, BasicBlock bb, Meeter meeter) {
     boolean changed = false;
     MachineState L = (MachineState) lhs;
 
@@ -412,7 +411,7 @@ public abstract class AbstractIntStackMachine implements FixedPointConstants {
    * @param bb the basic block at whose entry the meet occurs
    * @return true if the lhs value changes. false otherwise.
    */
-  private boolean meetStacks(IVariable lhs, IVariable[] rhs, BasicBlock bb, Meeter meeter) {
+  private static boolean meetStacks(IVariable lhs, IVariable[] rhs, BasicBlock bb, Meeter meeter) {
     boolean changed = false;
     MachineState L = (MachineState) lhs;
 
@@ -465,7 +464,7 @@ public abstract class AbstractIntStackMachine implements FixedPointConstants {
    * @param bb the basic block at whose entry the meet occurs
    * @return true if the lhs value changes. false otherwise.
    */
-  private boolean meetLocals(IVariable lhs, IVariable[] rhs, BasicBlock bb, Meeter meeter) {
+  private static boolean meetLocals(IVariable lhs, IVariable[] rhs, BasicBlock bb, Meeter meeter) {
 
     boolean changed = false;
     MachineState L = (MachineState) lhs;
@@ -683,8 +682,8 @@ public abstract class AbstractIntStackMachine implements FixedPointConstants {
             return true;
 
       if (locals != null)
-        for (int i = 0; i < locals.length; i++)
-          if (locals[i] == val)
+        for (int local : locals)
+          if (local == val)
             return true;
 
       return false;
@@ -703,7 +702,7 @@ public abstract class AbstractIntStackMachine implements FixedPointConstants {
         result.append(array2StringBuffer(stack, stackHeight));
       }
       result.append("L");
-      result.append(array2StringBuffer(locals, locals.length));
+      result.append(array2StringBuffer(locals, locals==null?0:locals.length));
       result.append(">");
       return result.toString();
     }

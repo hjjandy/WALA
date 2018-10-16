@@ -12,14 +12,12 @@
 package com.ibm.wala.dataflow.graph;
 
 import com.ibm.wala.fixpoint.BitVectorVariable;
-import com.ibm.wala.fixpoint.FixedPointConstants;
 import com.ibm.wala.util.intset.IntSet;
-import com.ibm.wala.util.intset.IntSetAction;
 
 /**
  * Operator U(n) = U(n) n U(j)
  */
-public final class BitVectorIntersection extends AbstractMeetOperator<BitVectorVariable> implements FixedPointConstants {
+public final class BitVectorIntersection extends AbstractMeetOperator<BitVectorVariable> {
 
   private static final BitVectorIntersection INSTANCE = new BitVectorIntersection();
 
@@ -60,12 +58,7 @@ public final class BitVectorIntersection extends AbstractMeetOperator<BitVectorV
       return NOT_CHANGED;
     } else {
       final BitVectorVariable bvv = new BitVectorVariable();
-      intersect.foreach(new IntSetAction() {
-        @Override
-        public void act(final int x) {
-          bvv.set(x);
-        }
-      });
+      intersect.foreach(bvv::set);
       lhs.copyState(bvv);
 
       return CHANGED;

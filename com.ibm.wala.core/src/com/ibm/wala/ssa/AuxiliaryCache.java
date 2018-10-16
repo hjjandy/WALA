@@ -12,8 +12,8 @@ package com.ibm.wala.ssa;
 
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.Context;
@@ -26,19 +26,19 @@ import com.ibm.wala.util.ref.CacheReference;
 /**
  * A cache for auxiliary information based on an SSA representation
  * 
- * A mapping from (IMethod,Context) -> SSAOptions -> SoftReference -> something
+ * A mapping from (IMethod,Context) -&gt; SSAOptions -&gt; SoftReference -&gt; something
  * 
  * This doesn't work very well ... GCs don't do such a great job with SoftReferences ... revamp it.
  */
-class AuxiliaryCache {
+public class AuxiliaryCache implements IAuxiliaryCache {
 
   /**
-   * A mapping from IMethod -> SSAOptions -> SoftReference -> IR
+   * A mapping from IMethod -&gt; SSAOptions -&gt; SoftReference -&gt; IR
    */
   private HashMap<Pair<IMethod, Context>, Map<SSAOptions, Object>> dictionary = HashMapFactory.make();
 
   /**
-   * Help out the garbage collector: clear this cache when the number of items is > RESET_THRESHOLD
+   * Help out the garbage collector: clear this cache when the number of items is &gt; RESET_THRESHOLD
    */
   final private static int RESET_THRESHOLD = 2000;
 
@@ -47,9 +47,10 @@ class AuxiliaryCache {
    */
   private int nItems = 0;
 
-  /**
-   * The existence of this is unfortunate.
+  /* 
+   * @see com.ibm.wala.ssa.IAuxiliaryCache#wipe()
    */
+  @Override
   public synchronized void wipe() {
     dictionary = HashMapFactory.make();
     nItems = 0;
@@ -63,33 +64,29 @@ class AuxiliaryCache {
     dictionary = HashMapFactory.make();
     nItems = 0;
 
-    for (Iterator<Map.Entry<Pair<IMethod, Context>, Map<SSAOptions, Object>>> it = oldDictionary.entrySet().iterator(); it
-        .hasNext();) {
-      Map.Entry<Pair<IMethod, Context>, Map<SSAOptions, Object>> e = it.next();
-      Map<SSAOptions, Object> m = e.getValue();
-      HashSet<Object> toRemove = HashSetFactory.make();
-      for (Iterator it2 = m.entrySet().iterator(); it2.hasNext();) {
-        Map.Entry e2 = (Map.Entry) it2.next();
-        Object key = e2.getKey();
-        Object val = e2.getValue();
-        if (CacheReference.get(val) == null) {
-          toRemove.add(key);
-        }
-      }
-      for (Iterator<Object> it2 = toRemove.iterator(); it2.hasNext();) {
-        m.remove(it2.next());
-      }
-      if (m.size() > 0) {
-        dictionary.put(e.getKey(), m);
-      }
+    for (Entry<Pair<IMethod, Context>, Map<SSAOptions, Object>> e : oldDictionary.entrySet()) {
+   Map<SSAOptions, Object> m = e.getValue();
+   HashSet<Object> toRemove = HashSetFactory.make();
+   for (Entry<SSAOptions, Object> e2 : m.entrySet()) {
+    Object key = e2.getKey();
+    Object val = e2.getValue();
+    if (CacheReference.get(val) == null) {
+      toRemove.add(key);
     }
+   }
+   for (Object object : toRemove) {
+    m.remove(object);
+   }
+   if (m.size() > 0) {
+    dictionary.put(e.getKey(), m);
+   }
+  }
   }
 
-  /**
-   * @param m a method
-   * @param options options governing ssa construction
-   * @return the object cached for m, or null if none found
+  /* 
+   * @see com.ibm.wala.ssa.IAuxiliaryCache#find(com.ibm.wala.classLoader.IMethod, com.ibm.wala.ipa.callgraph.Context, com.ibm.wala.ssa.SSAOptions)
    */
+  @Override
   public synchronized Object find(IMethod m, Context c, SSAOptions options) {
     // methodMap: SSAOptions -> SoftReference
     Pair<IMethod, Context> p = Pair.make(m, c);
@@ -102,12 +99,10 @@ class AuxiliaryCache {
     }
   }
 
-  /**
-   * cache new auxiliary information for an <m,options> pair
-   * 
-   * @param m a method
-   * @param options options governing ssa construction
+  /* 
+   * @see com.ibm.wala.ssa.IAuxiliaryCache#cache(com.ibm.wala.classLoader.IMethod, com.ibm.wala.ipa.callgraph.Context, com.ibm.wala.ssa.SSAOptions, java.lang.Object)
    */
+  @Override
   public synchronized void cache(IMethod m, Context c, SSAOptions options, Object aux) {
     nItems++;
 
@@ -121,9 +116,10 @@ class AuxiliaryCache {
     methodMap.put(options, ref);
   }
 
-  /**
-   * invalidate all cached information about a method
+  /* 
+   * @see com.ibm.wala.ssa.IAuxiliaryCache#invalidate(com.ibm.wala.classLoader.IMethod, com.ibm.wala.ipa.callgraph.Context)
    */
+  @Override
   public void invalidate(IMethod method, Context c) {
     dictionary.remove(Pair.make(method, c));
   }

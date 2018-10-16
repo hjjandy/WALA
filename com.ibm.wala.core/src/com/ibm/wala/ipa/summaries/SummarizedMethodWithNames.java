@@ -63,7 +63,7 @@ import com.ibm.wala.util.strings.Atom;
  *  names in synthetic methods. This should not change th analysis-result but may come in handy when
  *  debugging.
  *
- *  @author     Tobias Blaschke <code@tobiasblaschke.de>
+ *  @author     Tobias Blaschke &lt;code@tobiasblaschke.de&gt;
  *  @since      2013-11-25
  */
 public class SummarizedMethodWithNames extends SummarizedMethod {
@@ -72,6 +72,10 @@ public class SummarizedMethodWithNames extends SummarizedMethod {
   
     private final MethodSummary summary;
     private final Map<Integer, Atom> localNames;
+
+    public SummarizedMethodWithNames(MethodReference ref, MethodSummary summary, IClass declaringClass) {
+      this(ref, summary, declaringClass, summary.getValueNames());
+    }
 
     public SummarizedMethodWithNames(MethodReference ref, MethodSummary summary, IClass declaringClass, Map<Integer, Atom> localNames) 
                 throws NullPointerException {
@@ -83,11 +87,12 @@ public class SummarizedMethodWithNames extends SummarizedMethod {
         if (DEBUG) { System.err.println("From old MSUM"); }
     }
     
+    @SuppressWarnings("unused")
     public SummarizedMethodWithNames(MethodReference ref, VolatileMethodSummary summary, IClass declaringClass) 
                 throws NullPointerException {
         super(ref, summary.getMethodSummary(), declaringClass);
         this.summary = summary.getMethodSummary();
-        this.localNames = ((VolatileMethodSummary)summary).getLocalNames();
+        this.localNames = summary.getLocalNames();
         if (DEBUG && this.localNames.isEmpty()) {
           System.err.println("Local names are empty for " + ref);
         }
@@ -109,7 +114,7 @@ public class SummarizedMethodWithNames extends SummarizedMethod {
             @Override
             public String[] getLocalNames(int index, int vn) {
                 if (DEBUG) { System.err.printf("IR.getLocalNames({}, {})", index, vn); }
-                if (this.localNames.containsKey(vn)) {
+                if (localNames != null && localNames.containsKey(vn)) {
                     return new String[] { this.localNames.get(vn).toString() };
                 } else {
                     return null;

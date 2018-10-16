@@ -23,7 +23,6 @@ import com.ibm.wala.classLoader.Language;
 import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.classLoader.SyntheticClass;
 import com.ibm.wala.fixpoint.UnaryOperator;
-import com.ibm.wala.ipa.callgraph.AnalysisCache;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
@@ -32,6 +31,7 @@ import com.ibm.wala.ipa.callgraph.CallGraphBuilderCancelException;
 import com.ibm.wala.ipa.callgraph.Context;
 import com.ibm.wala.ipa.callgraph.ContextSelector;
 import com.ibm.wala.ipa.callgraph.Entrypoint;
+import com.ibm.wala.ipa.callgraph.IAnalysisCacheView;
 import com.ibm.wala.ipa.callgraph.impl.AbstractRootMethod;
 import com.ibm.wala.ipa.callgraph.impl.ExplicitCallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.rta.RTAContextInterpreter;
@@ -57,7 +57,7 @@ import com.ibm.wala.util.warnings.Warnings;
  * TODO: This implementation currently keeps all points to sets live ... even those for local variables that do not span
  * interprocedural boundaries. This may be too space-inefficient .. we can consider recomputing local sets on demand.
  */
-public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
+public abstract class PropagationCallGraphBuilder implements CallGraphBuilder<InstanceKey> {
   private final static boolean DEBUG_ALL = false;
 
   final static boolean DEBUG_ASSIGN = DEBUG_ALL | false;
@@ -99,7 +99,7 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
   /**
    * Cache of IRs and things
    */
-  private final AnalysisCache analysisCache;
+  private final IAnalysisCacheView analysisCache;
 
   /**
    * Set of nodes that have already been traversed for constraints
@@ -138,7 +138,7 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
   /**
    * Singleton operator for assignments
    */
-  protected final static AssignOperator assignOperator = new AssignOperator();
+  public final static AssignOperator assignOperator = new AssignOperator();
 
   /**
    * singleton operator for filter
@@ -171,26 +171,25 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
   final private boolean rememberGetPutHistory = true;
 
   /**
-   * @param cha governing class hierarchy
    * @param options governing call graph construction options
    * @param pointerKeyFactory factory which embodies pointer abstraction policy
    */
-  protected PropagationCallGraphBuilder(IClassHierarchy cha, AnalysisOptions options, AnalysisCache cache,
+  protected PropagationCallGraphBuilder(IMethod abstractRootMethod, AnalysisOptions options, IAnalysisCacheView cache,
       PointerKeyFactory pointerKeyFactory) {
-    if (cha == null) {
+    if (abstractRootMethod == null) {
       throw new IllegalArgumentException("cha is null");
     }
     if (options == null) {
       throw new IllegalArgumentException("options is null");
     }
     assert cache != null;
-    this.cha = cha;
+    this.cha = abstractRootMethod.getClassHierarchy();
     this.options = options;
     this.analysisCache = cache;
     // we need pointer keys to handle reflection
     assert pointerKeyFactory != null;
     this.pointerKeyFactory = pointerKeyFactory;
-    callGraph = createEmptyCallGraph(cha, options);
+    callGraph = createEmptyCallGraph(abstractRootMethod, options);
     try {
       callGraph.init();
     } catch (CancelException e) {
@@ -202,8 +201,8 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
     JAVA_LANG_OBJECT = cha.lookupClass(TypeReference.JavaLangObject);
   }
 
-  protected ExplicitCallGraph createEmptyCallGraph(IClassHierarchy cha, AnalysisOptions options) {
-    return new ExplicitCallGraph(cha, options, getAnalysisCache());
+  protected ExplicitCallGraph createEmptyCallGraph(IMethod abstractRootMethod, AnalysisOptions options) {
+    return new ExplicitCallGraph(abstractRootMethod, options, getAnalysisCache());
   }
 
   /**
@@ -244,8 +243,7 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
     discoveredNodes.add(callGraph.getFakeRootNode());
 
     // Set up the initially reachable methods and classes
-    for (Iterator it = options.getEntrypoints().iterator(); it.hasNext();) {
-      Entrypoint E = (Entrypoint) it.next();
+    for (Entrypoint E : options.getEntrypoints()) {
       if (DEBUG_ENTRYPOINTS) {
         System.err.println("Entrypoint: " + E);
       }
@@ -281,7 +279,7 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
     return callGraph;
   }
 
-  protected PropagationSystem makeSystem(AnalysisOptions options) {
+  protected PropagationSystem makeSystem(@SuppressWarnings("unused") AnalysisOptions options) {
     return new PropagationSystem(callGraph, pointerKeyFactory, instanceKeyFactory);
   }
 
@@ -590,7 +588,7 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
    * LHS U= (RHS n k)
    * 
    * 
-   * Unary op: <lhs>:= Cast_k( <rhs>)
+   * Unary op: &lt;lhs&gt;:= Cast_k( &lt;rhs&gt;)
    * 
    * (Again, technically a binary op -- see note for Assign)
    * 
@@ -656,6 +654,7 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
 
   }
 
+  @Override
   public IClassHierarchy getClassHierarchy() {
     return cha;
   }
@@ -712,7 +711,6 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
    * @return the CGNode to which this particular call should dispatch.
    */
   protected CGNode getTargetForCall(CGNode caller, CallSiteReference site, IClass recv, InstanceKey iKey[]) {
-
     IMethod targetMethod = options.getMethodTargetSelector().getCalleeTarget(caller, site, recv);
 
     // this most likely indicates an exclusion at work; the target selector
@@ -722,7 +720,7 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
     }
     Context targetContext = contextSelector.getCalleeTarget(caller, site, targetMethod, iKey);
     
-    if (targetContext instanceof IllegalArgumentExceptionContext) {
+    if (targetContext.isA(IllegalArgumentExceptionContext.class)) {
       return null;
     }
     try {
@@ -803,7 +801,7 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
   }
 
   /**
-   * Binary op: <dummy>:= ArrayLoad( &lt;arrayref>) Side effect: Creates new equations.
+   * Binary op: &lt;dummy&gt;:= ArrayLoad( &lt;arrayref&gt;) Side effect: Creates new equations.
    */
   public final class ArrayLoadOperator extends UnarySideEffect implements IPointerOperator {
     protected final MutableIntSet priorInstances = rememberGetPutHistory ? IntSetUtil.make() : null;
@@ -833,33 +831,29 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
       if (rhs.size() == 0) {
         return NOT_CHANGED;
       }
-      final PointerKey object = rhs.getPointerKey();
 
       PointsToSetVariable def = getFixedSet();
       final PointerKey dVal = def.getPointerKey();
 
       final MutableBoolean sideEffect = new MutableBoolean();
-      IntSetAction action = new IntSetAction() {
-        @Override
-        public void act(int i) {
-          InstanceKey I = system.getInstanceKey(i);
-          if (!I.getConcreteType().isArrayClass()) {
-            return;
-          }
-          TypeReference C = I.getConcreteType().getReference().getArrayElementType();
-          if (C.isPrimitiveType()) {
-            return;
-          }
-          PointerKey p = getPointerKeyForArrayContents(I);
-          if (p == null) {
-            return;
-          }
-
-          if (DEBUG_ARRAY_LOAD) {
-            System.err.println("ArrayLoad add assign: " + dVal + " " + p);
-          }
-          sideEffect.b |= system.newFieldRead(dVal, assignOperator, p, object);
+      IntSetAction action = i -> {
+        InstanceKey I = system.getInstanceKey(i);
+        if (!I.getConcreteType().isArrayClass()) {
+          return;
         }
+        TypeReference C = I.getConcreteType().getReference().getArrayElementType();
+        if (C.isPrimitiveType()) {
+          return;
+        }
+        PointerKey p = getPointerKeyForArrayContents(I);
+        if (p == null) {
+          return;
+        }
+
+        if (DEBUG_ARRAY_LOAD) {
+          System.err.println("ArrayLoad add assign: " + dVal + " " + p);
+        }
+        sideEffect.b |= system.newFieldRead(dVal, assignOperator, p);
       };
       if (priorInstances != null) {
         rhs.getValue().foreachExcluding(priorInstances, action);
@@ -896,7 +890,7 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
   }
 
   /**
-   * Binary op: <dummy>:= ArrayStore( &lt;arrayref>) Side effect: Creates new equations.
+   * Binary op: &lt;dummy&gt;:= ArrayStore( &lt;arrayref&gt;) Side effect: Creates new equations.
    */
   public final class ArrayStoreOperator extends UnarySideEffect implements IPointerOperator {
     @Override
@@ -921,15 +915,13 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
       if (rhs.size() == 0) {
         return NOT_CHANGED;
       }
-      PointerKey object = rhs.getPointerKey();
 
       PointsToSetVariable val = getFixedSet();
       PointerKey pVal = val.getPointerKey();
 
       List<InstanceKey> instances = system.getInstances(rhs.getValue());
       boolean sideEffect = false;
-      for (Iterator<InstanceKey> it = instances.iterator(); it.hasNext();) {
-        InstanceKey I = it.next();
+      for (InstanceKey I : instances) {
         if (!I.getConcreteType().isArrayClass()) {
           continue;
         }
@@ -951,9 +943,9 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
 
         // note that the following is idempotent
         if (isJavaLangObject(contents)) {
-          sideEffect |= system.newFieldWrite(p, assignOperator, pVal, object);
+          sideEffect |= system.newFieldWrite(p, assignOperator, pVal);
         } else {
-          sideEffect |= system.newFieldWrite(p, filterOperator, pVal, object);
+          sideEffect |= system.newFieldWrite(p, filterOperator, pVal);
         }
       }
       byte sideEffectMask = sideEffect ? (byte) SIDE_EFFECT_MASK : 0;
@@ -982,7 +974,7 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
   }
 
   /**
-   * Binary op: <dummy>:= GetField( <ref>) Side effect: Creates new equations.
+   * Binary op: &lt;dummy&gt;:= GetField( &lt;ref&gt;) Side effect: Creates new equations.
    */
   public class GetFieldOperator extends UnarySideEffect implements IPointerOperator {
     private final IField field;
@@ -1012,7 +1004,6 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
       if (ref.size() == 0) {
         return NOT_CHANGED;
       }
-      final PointerKey object = ref.getPointerKey();
       PointsToSetVariable def = getFixedSet();
       final PointerKey dVal = def.getPointerKey();
 
@@ -1024,20 +1015,17 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
         }
       }
       final MutableBoolean sideEffect = new MutableBoolean();
-      IntSetAction action = new IntSetAction() {
-        @Override
-        public void act(int i) {
-          InstanceKey I = system.getInstanceKey(i);
-          if (!representsNullType(I)) {
-            PointerKey p = getPointerKeyForInstanceField(I, getField());
+      IntSetAction action = i -> {
+        InstanceKey I = system.getInstanceKey(i);
+        if (!representsNullType(I)) {
+          PointerKey p = getPointerKeyForInstanceField(I, getField());
 
-            if (p != null) {
-              if (DEBUG_GET) {
-                String S = "Getfield add constraint " + dVal + " " + p;
-                System.err.println(S);
-              }
-              sideEffect.b |= system.newFieldRead(dVal, assignOperator, p, object);
+          if (p != null) {
+            if (DEBUG_GET) {
+              String S = "Getfield add constraint " + dVal + " " + p;
+              System.err.println(S);
             }
+            sideEffect.b |= system.newFieldRead(dVal, assignOperator, p);
           }
         }
       };
@@ -1129,7 +1117,6 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
       if (rhs.size() == 0) {
         return NOT_CHANGED;
       }
-      final PointerKey object = rhs.getPointerKey();
 
       PointsToSetVariable val = getFixedSet();
       final PointerKey pVal = val.getPointerKey();
@@ -1140,23 +1127,20 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
         Assertions.UNREACHABLE();
       }
       final MutableBoolean sideEffect = new MutableBoolean();
-      IntSetAction action = new IntSetAction() {
-        @Override
-        public void act(int i) {
-          InstanceKey I = system.getInstanceKey(i);
-          if (!representsNullType(I)) {
+      IntSetAction action = i -> {
+        InstanceKey I = system.getInstanceKey(i);
+        if (!representsNullType(I)) {
+          if (DEBUG_PUT) {
+            String S1 = "Putfield consider instance " + I;
+            System.err.println(S1);
+          }
+          PointerKey p = getPointerKeyForInstanceField(I, getField());
+          if (p != null) {
             if (DEBUG_PUT) {
-              String S = "Putfield consider instance " + I;
-              System.err.println(S);
+              String S2 = "Putfield add constraint " + p + " " + pVal;
+              System.err.println(S2);
             }
-            PointerKey p = getPointerKeyForInstanceField(I, getField());
-            if (p != null) {
-              if (DEBUG_PUT) {
-                String S = "Putfield add constraint " + p + " " + pVal;
-                System.err.println(S);
-              }
-              sideEffect.b |= system.newFieldWrite(p, assign, pVal, object);
-            }
+            sideEffect.b |= system.newFieldWrite(p, assign, pVal);
           }
         }
       };
@@ -1243,15 +1227,12 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
       }
       IntSet value = ref.getValue();
       final MutableBoolean sideEffect = new MutableBoolean();
-      IntSetAction action = new IntSetAction() {
-        @Override
-        public void act(int i) {
-          InstanceKey I = system.getInstanceKey(i);
-          if (!representsNullType(I)) {
-            PointerKey p = getPointerKeyForInstanceField(I, field);
-            if (p != null) {
-              sideEffect.b |= system.newConstraint(p, instance);
-            }
+      IntSetAction action = i -> {
+        InstanceKey I = system.getInstanceKey(i);
+        if (!representsNullType(I)) {
+          PointerKey p = getPointerKeyForInstanceField(I, field);
+          if (p != null) {
+            sideEffect.b |= system.newConstraint(p, instance);
           }
         }
       };
@@ -1317,33 +1298,30 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
       }
       IntSet value = arrayref.getValue();
       final MutableBoolean sideEffect = new MutableBoolean();
-      IntSetAction action = new IntSetAction() {
-        @Override
-        public void act(int i) {
-          InstanceKey I = system.getInstanceKey(i);
-          if (!I.getConcreteType().isArrayClass()) {
-            return;
+      IntSetAction action = i -> {
+        InstanceKey I = system.getInstanceKey(i);
+        if (!I.getConcreteType().isArrayClass()) {
+          return;
+        }
+        if (I instanceof ZeroLengthArrayInNode) {
+          return;
+        }
+        TypeReference C = I.getConcreteType().getReference().getArrayElementType();
+        if (C.isPrimitiveType()) {
+          return;
+        }
+        IClass contents = getClassHierarchy().lookupClass(C);
+        if (contents == null) {
+          assert false : "null type for " + C + " " + I.getConcreteType();
+        }
+        PointerKey p = getPointerKeyForArrayContents(I);
+        if (contents.isInterface()) {
+          if (getClassHierarchy().implementsInterface(instance.getConcreteType(), contents)) {
+            sideEffect.b |= system.newConstraint(p, instance);
           }
-          if (I instanceof ZeroLengthArrayInNode) {
-            return;
-          }
-          TypeReference C = I.getConcreteType().getReference().getArrayElementType();
-          if (C.isPrimitiveType()) {
-            return;
-          }
-          IClass contents = getClassHierarchy().lookupClass(C);
-          if (contents == null) {
-            assert false : "null type for " + C + " " + I.getConcreteType();
-          }
-          PointerKey p = getPointerKeyForArrayContents(I);
-          if (contents.isInterface()) {
-            if (getClassHierarchy().implementsInterface(instance.getConcreteType(), contents)) {
-              sideEffect.b |= system.newConstraint(p, instance);
-            }
-          } else {
-            if (getClassHierarchy().isSubclassOf(instance.getConcreteType(), contents)) {
-              sideEffect.b |= system.newConstraint(p, instance);
-            }
+        } else {
+          if (getClassHierarchy().isSubclassOf(instance.getConcreteType(), contents)) {
+            sideEffect.b |= system.newConstraint(p, instance);
           }
         }
       };
@@ -1393,6 +1371,7 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
    * @param klass a class
    * @return an int set which represents the subset of S that correspond to subtypes of klass
    */
+  @SuppressWarnings("unused")
   protected IntSet filterForClass(IntSet S, IClass klass) {
     MutableIntSet filter = null;
     if (klass.getReference().equals(TypeReference.JavaLangObject)) {
@@ -1486,8 +1465,8 @@ public abstract class PropagationCallGraphBuilder implements CallGraphBuilder {
   }
 
   @Override
-  public AnalysisCache getAnalysisCache() {
+  public IAnalysisCacheView getAnalysisCache() {
     return analysisCache;
-  };
+  }
 
 }

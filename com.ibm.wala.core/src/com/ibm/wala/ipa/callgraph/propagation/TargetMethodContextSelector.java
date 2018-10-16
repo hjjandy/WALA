@@ -17,7 +17,6 @@ import com.ibm.wala.ipa.callgraph.Context;
 import com.ibm.wala.ipa.callgraph.ContextItem;
 import com.ibm.wala.ipa.callgraph.ContextKey;
 import com.ibm.wala.ipa.callgraph.ContextSelector;
-import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.types.Selector;
 import com.ibm.wala.util.intset.IntSet;
 import com.ibm.wala.util.intset.IntSetUtil;
@@ -30,7 +29,7 @@ public class TargetMethodContextSelector implements ContextSelector {
 
   private final Selector selector;
 
-  public TargetMethodContextSelector(Selector selector, IClassHierarchy cha) {
+  public TargetMethodContextSelector(Selector selector) {
     this.selector = selector;
   }
 
@@ -52,6 +51,8 @@ public class TargetMethodContextSelector implements ContextSelector {
       public ContextItem get(ContextKey name) {
         if (name.equals(ContextKey.PARAMETERS[0])) {
           return new FilteredPointerKey.TargetMethodFilter(M);
+        } else if (name.equals(ContextKey.TARGET)) {
+          return M;
         } else {
           return null;
         }
@@ -69,10 +70,11 @@ public class TargetMethodContextSelector implements ContextSelector {
 
       @Override
       public boolean equals(Object o) {
-        return (o instanceof MethodDispatchContext) && ((MethodDispatchContext) o).getTargetMethod().equals(M);
+        return (o instanceof Context) && 
+            ((Context)o).isA(MethodDispatchContext.class) && 
+            ((Context)o).get(ContextKey.TARGET).equals(M);
       }
     }
-    ;
 
     return new MethodDispatchContext();
   }

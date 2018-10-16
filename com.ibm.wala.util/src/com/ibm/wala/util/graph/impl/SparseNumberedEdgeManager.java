@@ -21,12 +21,13 @@ import com.ibm.wala.util.intset.BasicNaturalRelation;
 import com.ibm.wala.util.intset.BitVector;
 import com.ibm.wala.util.intset.IBinaryNaturalRelation;
 import com.ibm.wala.util.intset.IntSet;
-import com.ibm.wala.util.intset.IntSetAction;
 
 /**
  * An object which tracks edges for nodes that have numbers.
  */
 public final class SparseNumberedEdgeManager<T> implements NumberedEdgeManager<T>, Serializable {
+
+  private static final long serialVersionUID = 6751048618312429623L;
 
   private final NumberedNodeManager<T> nodeManager;
 
@@ -51,7 +52,7 @@ public final class SparseNumberedEdgeManager<T> implements NumberedEdgeManager<T
    *          an object to track nodes
    * @param normalCase
    *          what is the "normal" number of out edges for a node?
-   * @throws IllegalArgumentException  if normalCase < 0
+   * @throws IllegalArgumentException  if normalCase &lt; 0
    */
   public SparseNumberedEdgeManager(NumberedNodeManager<T> nodeManager, int normalCase, byte delegateImpl) throws IllegalArgumentException {
     if (nodeManager == null) {
@@ -202,22 +203,14 @@ public final class SparseNumberedEdgeManager<T> implements NumberedEdgeManager<T
     }
     IntSet succ = successors.getRelated(number);
     if (succ != null) {
-      succ.foreach(new IntSetAction() {
-        @Override
-        public void act(int x) {
-          predecessors.remove(x, number);
-        }
-      });
+      succ.foreach(x -> predecessors.remove(x, number));
     }
     IntSet pred = predecessors.getRelated(number);
     if (pred != null) {
-      pred.foreach(new IntSetAction() {
-        @Override
-        public void act(int x) {
-          successors.remove(x, number);
-          if (successors.getRelatedCount(x) == 0) {
-            hasSuccessor.clear(x);
-          }
+      pred.foreach(x -> {
+        successors.remove(x, number);
+        if (successors.getRelatedCount(x) == 0) {
+          hasSuccessor.clear(x);
         }
       });
     }
@@ -237,13 +230,10 @@ public final class SparseNumberedEdgeManager<T> implements NumberedEdgeManager<T
     }
     IntSet pred = predecessors.getRelated(number);
     if (pred != null) {
-      pred.foreach(new IntSetAction() {
-        @Override
-        public void act(int x) {
-          successors.remove(x, number);
-          if (successors.getRelatedCount(x) == 0) {
-            hasSuccessor.clear(x);
-          }
+      pred.foreach(x -> {
+        successors.remove(x, number);
+        if (successors.getRelatedCount(x) == 0) {
+          hasSuccessor.clear(x);
         }
       });
     }
@@ -278,12 +268,7 @@ public final class SparseNumberedEdgeManager<T> implements NumberedEdgeManager<T
     }
     IntSet succ = successors.getRelated(number);
     if (succ != null) {
-      succ.foreach(new IntSetAction() {
-        @Override
-        public void act(int x) {
-          predecessors.remove(x, number);
-        }
-      });
+      succ.foreach(x -> predecessors.remove(x, number));
     }
     successors.removeAll(number);
     hasSuccessor.clear(number);

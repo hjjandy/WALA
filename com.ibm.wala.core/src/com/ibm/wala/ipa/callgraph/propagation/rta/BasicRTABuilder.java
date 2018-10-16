@@ -10,8 +10,6 @@
  *******************************************************************************/
 package com.ibm.wala.ipa.callgraph.propagation.rta;
 
-import java.util.Iterator;
-
 import com.ibm.wala.analysis.reflection.CloneInterpreter;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
@@ -19,10 +17,10 @@ import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.fixpoint.IntSetVariable;
 import com.ibm.wala.fixpoint.UnaryOperator;
-import com.ibm.wala.ipa.callgraph.AnalysisCache;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.ContextSelector;
+import com.ibm.wala.ipa.callgraph.IAnalysisCacheView;
 import com.ibm.wala.ipa.callgraph.impl.ExplicitCallGraph;
 import com.ibm.wala.ipa.callgraph.impl.ExplicitCallGraph.ExplicitNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -41,7 +39,7 @@ import com.ibm.wala.util.intset.MutableIntSet;
  */
 public class BasicRTABuilder extends AbstractRTABuilder {
 
-  public BasicRTABuilder(IClassHierarchy cha, AnalysisOptions options, AnalysisCache cache, ContextSelector contextSelector,
+  public BasicRTABuilder(IClassHierarchy cha, AnalysisOptions options, IAnalysisCacheView cache, ContextSelector contextSelector,
       SSAContextInterpreter contextInterpreter) {
     super(cha, options, cache, contextSelector, contextInterpreter);
   }
@@ -55,8 +53,7 @@ public class BasicRTABuilder extends AbstractRTABuilder {
     // set up the selector map to record each method that class implements
     registerImplementedMethods(klass, iKey);
 
-    for (Iterator ifaces = klass.getAllImplementedInterfaces().iterator(); ifaces.hasNext();) {
-      IClass c = (IClass) ifaces.next();
+    for (IClass c : klass.getAllImplementedInterfaces()) {
       registerImplementedMethods(c, iKey);
     }
     klass = klass.getSuperclass();
@@ -73,8 +70,7 @@ public class BasicRTABuilder extends AbstractRTABuilder {
     if (DEBUG) {
       System.err.println(("registerImplementedMethods: " + declarer + " " + iKey));
     }
-    for (Iterator it = declarer.getDeclaredMethods().iterator(); it.hasNext();) {
-      IMethod M = (IMethod) it.next();
+    for (IMethod M : declarer.getDeclaredMethods()) {
       Selector selector = M.getReference().getSelector();
       PointerKey sKey = getKeyForSelector(selector);
       if (DEBUG) {
@@ -116,6 +112,7 @@ public class BasicRTABuilder extends AbstractRTABuilder {
      */
     final private MutableIntSet previousReceivers = IntSetUtil.getDefaultIntSetFactory().make();
 
+    @SuppressWarnings("unused")
     @Override
     public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
       IntSetVariable receivers = rhs;
@@ -148,46 +145,43 @@ public class BasicRTABuilder extends AbstractRTABuilder {
       if (DEBUG_LEVEL >= 2) {
         System.err.println(("filtered value: " + value));
       }
-      IntSetAction action = new IntSetAction() {
-        @Override
-        public void act(int ptr) {
+      IntSetAction action = ptr -> {
+        if (DEBUG) {
+          System.err.println(("    dispatch to ptr " + ptr));
+        }
+        InstanceKey iKey = system.getInstanceKey(ptr);
+
+        CGNode target = getTargetForCall(caller, site, iKey.getConcreteType(), new InstanceKey[]{iKey});
+        if (target == null) {
+          // This indicates an error; I sure hope getTargetForCall
+          // raised a warning about this!
           if (DEBUG) {
-            System.err.println(("    dispatch to ptr " + ptr));
+            System.err.println(("Warning: null target for call " + site + " " + iKey));
           }
-          InstanceKey iKey = system.getInstanceKey(ptr);
-
-          CGNode target = getTargetForCall(caller, site, iKey.getConcreteType(), new InstanceKey[]{iKey});
-          if (target == null) {
-            // This indicates an error; I sure hope getTargetForCall
-            // raised a warning about this!
-            if (DEBUG) {
-              System.err.println(("Warning: null target for call " + site + " " + iKey));
-            }
+          return;
+        }
+        if (clone2Assign) {
+          if (target.getMethod().getReference().equals(CloneInterpreter.CLONE)) {
+            // (mostly) ignore a call to clone: it won't affect the
+            // solution, but we should probably at least have a call
+            // edge
+            caller.addTarget(site, target);
             return;
           }
-          if (clone2Assign) {
-            if (target.getMethod().getReference().equals(CloneInterpreter.CLONE)) {
-              // (mostly) ignore a call to clone: it won't affect the
-              // solution, but we should probably at least have a call
-              // edge
-              caller.addTarget(site, target);
-              return;
-            }
-          }
+        }
 
-          IntSet targets = getCallGraph().getPossibleTargetNumbers(caller, site);
-          if (targets != null && targets.contains(target.getGraphNodeId())) {
-            // do nothing; we've previously discovered and handled this
-            // receiver for this call site.
-            return;
-          }
+        IntSet targets = getCallGraph().getPossibleTargetNumbers(caller, site);
+        if (targets != null && targets.contains(target.getGraphNodeId())) {
+          // do nothing; we've previously discovered and handled this
+          // receiver for this call site.
+          return;
+        }
 
-          // process the newly discovered target for this call
-          processResolvedCall(caller, site, target);
+        // process the newly discovered target for this call
+        processResolvedCall(caller, site, target);
 
-          if (!haveAlreadyVisited(target)) {
-            markDiscovered(target);
-          }
+        if (!haveAlreadyVisited(target)) {
+          markDiscovered(target);
         }
       };
 
