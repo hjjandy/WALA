@@ -12,4 +12,4 @@ include(
 	'com.ibm.wala.util',
 )
 
-enableFeaturePreview('STABLE_PUBLISHING')
+// enableFeaturePreview('STABLE_PUBLISHING') // to be removed in Gradle 6.0
