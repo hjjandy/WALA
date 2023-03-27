@@ -1,0 +1,12 @@
+sourceSets.main.java.srcDirs = ['src/main/java']
+
+dependencies {
+    implementation(
+            'commons-io:commons-io:2.4',
+            project(':core'),
+            project(':shrike'),
+            project(':util'),
+    )
+}
+
+

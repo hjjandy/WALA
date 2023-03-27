@@ -1,0 +1,11 @@
+
+sourceSets.main.java.srcDirs = ['src/main/java']
+
+/**
+ * Declare dependencies
+ * @see http://www.gradle.org/docs/current/userguide/userguide_single.html#sec:how_to_declare_your_dependencies
+ */
+dependencies {
+    compileOnly 'org.jspecify:jspecify:0.3.0'
+}
+

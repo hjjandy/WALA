@@ -1,27 +1,34 @@
 group name
-version '1.5.1-SNAPSHOT'
+version = properties['VERSION_NAME']
 
 def releaseDir = rootDir.path + File.separator + "RELEASE"
 def externalLib = rootDir.path + File.separator + "external-libs"
 mkdir(releaseDir)
+println name
 
 subprojects { subproject ->
 
     apply plugin: 'java'
 
-    sourceCompatibility = 1.8
-    targetCompatibility = 1.8
+    sourceCompatibility = 1.11
+    targetCompatibility = 1.11
     version rootProject.version
+
+    compileTestJava.enabled = false
 
     repositories {
         flatDir { dirs(externalLib) }
-        //mavenCentral()
+        mavenCentral()
     }
 
-    jar.manifest.from('META-INF/MANIFEST.MF')
+    if (!parent.equals(rootProject)) {
+        archivesBaseName(rootProject.name + "." + parent.name + "." + name)
+    } else {
+        archivesBaseName(rootProject.name + "." + name)
+    }
 
     copy {
-        from(jar.destinationDir)
+        from(jar.destinationDirectory)
         include '*.jar'
         into releaseDir
     }

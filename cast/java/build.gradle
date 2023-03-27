@@ -1,0 +1,10 @@
+sourceSets.main.java.srcDirs = ['src/main/java']
+
+dependencies {
+    implementation(
+            project(':cast'),
+            project(':core'),
+            project(':shrike'),
+            project(':util'),
+    )
+}
