@@ -27,11 +27,12 @@ subprojects { subproject ->
         archivesBaseName(rootProject.name + "." + name)
     }
 
-    copy {
+    task copyJar(type: Copy) {
         from(jar.destinationDirectory)
         include '*.jar'
         into releaseDir
     }
+    jar.finalizedBy(copyJar)
 
 }
 
