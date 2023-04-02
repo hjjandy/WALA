@@ -3,8 +3,8 @@ sourceSets.main.java.srcDirs = ['src/main/java']
     implementation(
             'org.slf4j:slf4j-api:1.7.2',
             'org.smali:dexlib2:2.5.2',
-            'com.google.guava:guava:13.0.1',
-            project(':cast'),
+            'com.google.guava:guava:18.0',
+            // project(':cast'),
             project(':core'),
             project(':shrike'),
             project(':util'),
