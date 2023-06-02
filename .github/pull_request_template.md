@@ -1,1 +1,0 @@
-Thank you for contributing to WALA!  Please see the contribution guidelines at https://github.com/wala/WALA/blob/master/CONTRIBUTING.md for information on code style and general guidelines for pull requests.
